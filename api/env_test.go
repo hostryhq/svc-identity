@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"testing"
+	"time"
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-auth/authtest"
@@ -17,6 +18,7 @@ import (
 	"github.com/hostryhq/svc-identity/double"
 	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/service"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 var otpRE = regexp.MustCompile(`[0-9]{6}`)
@@ -144,3 +146,30 @@ func seedMember(id, name, roleID string) service.SeedMember {
 }
 
 func grantsAll() []auth.Grant { return authtest.OwnerGrants() }
+
+// mint signs a token of the given type carrying the owner's grants, for the strong_only ceiling tests.
+func (e *env) mint(typ auth.TokenType) string {
+	now := e.d.Clock.Now()
+	tok, err := e.d.Signer.Access(auth.Claims{Subject: "m-ceiling", Type: typ, TenantID: org.String(), DeviceID: newID(), SessionID: newID(), AMR: []string{"pin"},
+		AuthTime: now.Unix(), Grants: grantsAll(), IssuedAt: now.Unix(), ExpiresAt: now.Add(10 * time.Minute).Unix(), JTI: newID()})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return tok
+}
+
+// doNoT is do for goroutines: it returns the status only and never touches the test object.
+func (e *env) doNoT(method, path string, body any, key int) (int, []byte, http.Header) {
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(method, path, bytes.NewReader(b))
+	req.RemoteAddr = "203.0.113.7:4000"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("par-key-%d", key))
+	rec := httptest.NewRecorder()
+	e.d.Handler.ServeHTTP(rec, req)
+	return rec.Code, rec.Body.Bytes(), rec.Header()
+}
+
+func openapiEmail(s string) openapi_types.Email { return openapi_types.Email(s) }
+
+func ctxBackground() context.Context { return context.Background() }

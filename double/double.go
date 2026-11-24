@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,8 @@ type Options struct {
 	// (the contract requires a double to serve the spec's examples); such a double issues no
 	// verifiable token and must not be used by other services' tests.
 	LiteralTokens bool
+	// LogOut receives the structured request log (default: discarded). Used by the redaction test.
+	LogOut io.Writer
 	// Config overrides the default configuration (keys and cheap PIN parameters are filled in).
 	Config func(*service.Config)
 }
@@ -55,6 +58,7 @@ type Double struct {
 	Services *authtest.ServiceRegistry
 	SMS      *SMS
 	Notices  *Notices
+	Mail     *Mail
 	Access   *memory.AccessLog
 	Idem     *idempotency.Memory
 	Verifier *auth.Verifier
@@ -98,6 +102,32 @@ func (s *SMS) Last(to string) (Message, bool) {
 		}
 	}
 	return Message{}, false
+}
+
+// Mail records emails (vendor setup links). Exposed through this Go API only.
+type Mail struct {
+	mu   sync.Mutex
+	sent []Message
+}
+
+// Send implements service.MailSender: To is the address, Text the kind and the link token.
+func (m *Mail) Send(_ context.Context, to, kind, link string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = append(m.sent, Message{To: to, Text: kind + " " + link})
+	return nil
+}
+
+// LastLink returns the most recent setup token sent to an address.
+func (m *Mail) LastLink(to string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := len(m.sent) - 1; i >= 0; i-- {
+		if m.sent[i].To == to {
+			return strings.Fields(m.sent[i].Text)[1]
+		}
+	}
+	return ""
 }
 
 // Notices records notifications.
@@ -174,11 +204,16 @@ func New(o Options) *Double {
 	if err != nil {
 		panic(err)
 	}
+	logOut := o.LogOut
+	if logOut == nil {
+		logOut = io.Discard
+	}
 	sms := &SMS{}
 	notes := &Notices{}
+	mailer := &Mail{}
 	ids := clk.IDs()
 	svc := &service.Service{
-		Cfg: cfg, Store: st, Clock: clk, NewID: ids.New, Rand: rnd, SMS: sms, Notify: notes, Tokens: issuer, Cat: cat,
+		Cfg: cfg, Store: st, Clock: clk, NewID: ids.New, Rand: rnd, SMS: sms, Notify: notes, Mail: mailer, Tokens: issuer, Cat: cat,
 		Grants: grantlimit.Evaluator{Catalogue: cat}, Assertions: assertions, Approvable: api.ApprovableOperation(cat),
 	}
 	if err := svc.StartupCheck(); err != nil {
@@ -193,9 +228,9 @@ func New(o Options) *Double {
 		Vendor:    &auth.Verifier{Keys: signer.VendorKeys(), Issuer: token.VendorIssuer, Audience: token.VendorAudience, Realm: auth.RealmVendor, Clock: clk},
 		Services:  reg.Verifier("identity"),
 		Approvals: &auth.ApprovalChecker{Verifier: &auth.Verifier{Keys: signer.TenantKeys(), Issuer: token.TenantIssuer, Audience: token.TenantAudience, Realm: auth.RealmTenant, Clock: clk}, Used: auth.NewMemorySingleUse(clk)},
-		Audit:     acc, Clock: clk, Idem: idem, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		Audit:     acc, Clock: clk, Idem: idem, Log: slog.New(slog.NewJSONHandler(logOut, nil)),
 	})
-	return &Double{Handler: h, Service: svc, Store: st, Clock: clk, Signer: signer, Services: reg, SMS: sms, Notices: notes, Access: acc, Idem: idem, Verifier: verifier}
+	return &Double{Handler: h, Service: svc, Store: st, Clock: clk, Signer: signer, Services: reg, SMS: sms, Notices: notes, Mail: mailer, Access: acc, Idem: idem, Verifier: verifier}
 }
 
 func fixedKey(seed byte, n int) []byte {
