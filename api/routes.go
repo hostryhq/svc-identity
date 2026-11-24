@@ -74,7 +74,6 @@ func New(d Deps) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		apperr.WriteProblem(w, r, apperr.New(apperr.NotFound, "resource.not_found", "resource not found"))
 	})
-	apperr.RequestIDFunc = func(r *http.Request) string { return logx.RequestID(r.Context()) }
 	return httpx.Chain(mux, httpx.RequestID, httpx.Recover, h.accessLog)
 }
 
@@ -100,6 +99,10 @@ type statusWriter struct {
 func (w *statusWriter) WriteHeader(c int) { w.status = c; w.ResponseWriter.WriteHeader(c) }
 
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func init() { // once, at start-up: the global is read by every request
+	apperr.RequestIDFunc = func(r *http.Request) string { return logx.RequestID(r.Context()) }
+}
 
 // RouteCount is the number of operations the table registers (used by start-up and tests).
 func RouteCount() int { return len(routeTable) }

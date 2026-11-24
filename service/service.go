@@ -213,6 +213,9 @@ type Service struct {
 	Grants grantlimit.Evaluator
 	// Assertions verifies device-key assertions; production uses the ES256 verifier of this package.
 	Assertions AssertionVerifier
+	// SMSAsync sends the OTP text after the response is written, so a known number does not answer
+	// slower than an unknown one (IC-03, IST-07). The double sends synchronously so tests are deterministic.
+	SMSAsync bool
 	// Approvable reports whether an operation id may be filed for caution approval (A2.2). The api
 	// layer supplies it from the generated route table.
 	Approvable func(operationID string) bool

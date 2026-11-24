@@ -38,6 +38,7 @@ type Parts struct {
 	Services   *auth.ServiceVerifier
 	Log        *slog.Logger
 	Health     *health.Handler
+	SMSAsync   bool
 }
 
 // Result is the assembled service.
@@ -61,7 +62,7 @@ func Assemble(p Parts) (*Result, error) {
 		p.Assertions = service.ES256Assertions{}
 	}
 	svc := &service.Service{Cfg: p.Cfg, Store: p.Store, Clock: p.Clock, NewID: p.NewID, Rand: p.Rand, SMS: p.SMS, Notify: p.Notify, Mail: p.Mail,
-		Tokens: p.Tokens, Cat: cat, Grants: grantlimit.Evaluator{Catalogue: cat}, Assertions: p.Assertions, Approvable: api.ApprovableOperation(cat)}
+		Tokens: p.Tokens, Cat: cat, Grants: grantlimit.Evaluator{Catalogue: cat}, Assertions: p.Assertions, Approvable: api.ApprovableOperation(cat), SMSAsync: p.SMSAsync}
 	if err := svc.StartupCheck(); err != nil {
 		return nil, err
 	}

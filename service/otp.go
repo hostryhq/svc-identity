@@ -183,8 +183,12 @@ func (s *Service) CreateOtpChallenge(ctx context.Context, in gen.CreateOtpChalle
 	if refuse != nil {
 		return gen.OtpChallenge{}, refuse
 	}
-	if send != nil {
-		send() // after commit: an SMS is never sent for a challenge that was not stored
+	if send != nil { // after commit: an SMS is never sent for a challenge that was not stored
+		if s.SMSAsync {
+			go send()
+		} else {
+			send()
+		}
 	}
 	return out, nil
 }
