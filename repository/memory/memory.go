@@ -6,11 +6,15 @@ package memory
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"sort"
 	"sync"
 
+	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-common/events"
+	"github.com/hostryhq/go-common/ids"
+	"github.com/hostryhq/go-common/tenancy"
 	"github.com/hostryhq/svc-identity/repository"
 )
 
@@ -20,6 +24,8 @@ type Store struct {
 	data   map[string]repository.Record
 	audit  map[string][]auditRow
 	events []events.Envelope
+
+	auditDB tenancy.TxBeginner
 }
 
 type auditRow struct {
@@ -56,8 +62,23 @@ func (s *Store) Ping(context.Context) error { return nil }
 // ErrTenantMismatch is returned when a tenant transaction writes another tenant's row.
 var ErrTenantMismatch = errors.New("memory: row belongs to another tenant")
 
+// AuditDB, when set, makes requests on a vendor user's authority run inside go-auth's audited
+// transaction (the same path the Postgres repository takes), so the vendor access row is a
+// condition for the response in the test double too.
+func (s *Store) SetAuditDB(db tenancy.TxBeginner) { s.auditDB = db }
+
 // Tx implements repository.Store.
-func (s *Store) Tx(_ context.Context, scope string, fn func(repository.Tx) error) error {
+func (s *Store) Tx(ctx context.Context, scope string, fn func(repository.Tx) error) error {
+	if p, ok := auth.PrincipalFrom(ctx); ok && p.IsVendorActor() && s.auditDB != nil {
+		if _, has := tenancy.From(ctx); !has {
+			ctx = tenancy.With(ctx, tenancy.Context{TenantID: ids.ID(repository.Platform), ActorID: p.Subject})
+		}
+		return auth.WithAuditedTx(ctx, s.auditDB, func(context.Context, *sql.Tx) error { return s.run(scope, fn) })
+	}
+	return s.run(scope, fn)
+}
+
+func (s *Store) run(scope string, fn func(repository.Tx) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	work := make(map[string]repository.Record, len(s.data))
