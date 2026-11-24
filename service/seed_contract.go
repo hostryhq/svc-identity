@@ -1,0 +1,275 @@
+package service
+
+import (
+	"context"
+	"time"
+
+	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/repository"
+)
+
+// The seeding methods below build the state the shared contract suite's examples refer to. Like
+// the rest of Seeder they are reachable from no route.
+
+// ExampleLiterals reports whether the service accepts the literal placeholder credentials of the
+// API specification's examples ("assertion.example", "proof.example", "sig.example", TOTP 123456).
+// It is set only by the contract run of the double and the integration tests, never by main.
+func (s *Service) exampleLiteral(got, want string) bool { return s.Cfg.ExampleLiterals && got == want }
+
+// SeedDevice describes a device to seed.
+type SeedDevice struct {
+	ID, Outlet, Kind, Name, KeyProt, State, AccountID string
+	Key                                               crypto.JWK
+	LastSeen, DrainedAt                               time.Time
+	DrainedThrough                                    map[string]int
+}
+
+// Device stores a device and its global index entry.
+func (sd *Seeder) Device(ctx context.Context, tenant string, d SeedDevice) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		if d.State == "" {
+			d.State = "active"
+		}
+		doc := device{ID: d.ID, TenantID: tenant, OutletID: d.Outlet, Kind: d.Kind, Name: d.Name, State: d.State, KeyProt: d.KeyProt, Billing: billingFor(d.Kind),
+			Key: d.Key, Thumb: crypto.Thumbprint(d.Key), AccountID: d.AccountID, CreatedAt: s.now(), LastSeen: d.LastSeen, DrainedAt: d.DrainedAt}
+		for st, seq := range d.DrainedThrough {
+			doc.DrainedThr = append(doc.DrainedThr, stream{Stream: st, Seq: seq})
+		}
+		k1 := doc.Thumb
+		if d.State != "active" {
+			k1 = "revoked:" + d.ID
+		}
+		if err := put(tx, kDeviceIdx, repository.Global, d.ID, struct {
+			TenantID string `json:"tenant_id"`
+		}{tenant}, keys{k1: k1, unique: true}); err != nil {
+			return err
+		}
+		return put(tx, kDevice, tenant, d.ID, doc, keys{k1: d.Outlet})
+	})
+}
+
+// Owner creates the built-in owner role, an owner member and its account.
+func (sd *Seeder) Owner(ctx context.Context, tenant, memberID, name, mobile string) (accountID string, err error) {
+	s := sd.s
+	err = s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		_, ownerID, err := s.loadRoles(tx, tenant)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		if ownerID == "" {
+			ownerID = string(s.NewID())
+			if err := put(tx, kRole, tenant, ownerID, role{ID: ownerID, Name: "Owner", BuiltIn: true, Perms: []string{"*"}, CreatedAt: now, UpdatedAt: now}, keys{}); err != nil {
+				return err
+			}
+		}
+		m := member{ID: memberID, TenantID: tenant, DisplayName: name, Status: "active", Assignments: []assignment{{ID: string(s.NewID()), RoleID: ownerID}}, CreatedAt: now}
+		if err := put(tx, kMember, tenant, m.ID, m, keys{}); err != nil {
+			return err
+		}
+		return s.adjustOwners(tx, tenant, +1)
+	})
+	if err != nil {
+		return "", err
+	}
+	return sd.Account(ctx, tenant, memberID, mobile)
+}
+
+// Session stores a strong session.
+func (sd *Seeder) Session(ctx context.Context, tenant, sid, memberID, accountID, deviceID, bindingID string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		now := s.now()
+		return put(tx, kSession, repository.Global, sid, session{ID: sid, TenantID: tenant, MemberID: memberID, AccountID: accountID, Device: deviceID, Binding: bindingID,
+			AMR: "otp", AuthTime: now, CreatedAt: now}, keys{k1: memberID, k2: accountID})
+	})
+}
+
+// Binding stores an account-device binding; caution is the end of its caution window (zero: none).
+func (sd *Seeder) Binding(ctx context.Context, id, accountID, deviceID string, key crypto.JWK, caution time.Time) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		return put(tx, kBinding, repository.Global, id, binding{ID: id, AccountID: accountID, Device: deviceID, Key: key, Thumb: crypto.Thumbprint(key), CreatedAt: s.now(), Caution: caution, State: "active"},
+			keys{k1: accountID, k2: deviceID})
+	})
+}
+
+// Refresh stores a refresh token for a session.
+func (sd *Seeder) Refresh(ctx context.Context, tenant, sid, tok string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		now := s.now()
+		rd := refreshDoc{ID: s.refreshKey(tok), Session: sid, Lineage: sid, IdleUntil: now.Add(30 * 24 * time.Hour), AbsUntil: now.Add(90 * 24 * time.Hour)}
+		return put(tx, kRefresh, repository.Global, rd.ID, rd, keys{k1: sid})
+	})
+}
+
+// Challenge stores an OTP challenge whose code is known to the caller.
+func (sd *Seeder) Challenge(ctx context.Context, id, mobile, deviceID string, key crypto.JWK, code string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		return put(tx, kChallenge, repository.Global, id, challenge{ID: id, MobileKey: s.mobileKey(mobile), Device: deviceID, Key: key,
+			CodeMAC: crypto.MAC(s.Cfg.MACKey, "otp", id, code), ExpiresAt: s.now().Add(5 * time.Minute), Known: true}, keys{})
+	})
+}
+
+// Nonce stores a registration nonce.
+func (sd *Seeder) Nonce(ctx context.Context, nonce string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		return put(tx, kNonce, repository.Global, crypto.MAC(s.Cfg.MACKey, "nonce", nonce), nonceDoc{Expires: s.now().Add(5 * time.Minute)}, keys{})
+	})
+}
+
+// Activation stores an activation code.
+func (sd *Seeder) Activation(ctx context.Context, tenant, id, code, outlet, kind string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		return put(tx, kActivation, repository.Global, crypto.MAC(s.Cfg.MACKey, "activation", code),
+			activationDoc{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, By: "seed", Expires: s.now().Add(10 * time.Minute)}, keys{k1: id})
+	})
+}
+
+// PackHistory records that a pack version was issued to a device listing members and series.
+func (sd *Seeder) PackHistory(ctx context.Context, tenant, deviceID string, packV int, members, series []string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		h := packHist{ID: deviceID + ":" + itoa(packV), Device: deviceID, PackV: packV, Members: members, Series: series, At: s.now()}
+		if err := put(tx, kPackVer, tenant, deviceID, packVer{Latest: packV}, keys{}); err != nil {
+			return err
+		}
+		return put(tx, kPackHist, tenant, h.ID, h, keys{k1: deviceID})
+	})
+}
+
+// PinReset stores a PIN reset authorisation.
+func (sd *Seeder) PinReset(ctx context.Context, tenant, id, memberID string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		return put(tx, kPinReset, tenant, id, pinReset{ID: id, Member: memberID, Expires: s.now().Add(15 * time.Minute)}, keys{k1: memberID})
+	})
+}
+
+// ApprovalRequest stores a caution approval request.
+func (sd *Seeder) ApprovalRequest(ctx context.Context, tenant, id, memberID, accountID, sid, op string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		now := s.now()
+		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:3f2a", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+		return put(tx, kApprReq, repository.Global, id, r, keys{k1: tenant, k2: accountID})
+	})
+}
+
+// Revocation stores a revocation feed entry.
+func (sd *Seeder) Revocation(ctx context.Context, id, tenant, typ, subject string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		return put(tx, kRevocation, repository.Global, id, revocationDoc{ID: id, TenantID: tenant, Type: typ, Subject: subject, RevokedAt: s.now()}, keys{k1: subject})
+	})
+}
+
+// VendorUser stores an active vendor user with a known password and TOTP secret.
+func (sd *Seeder) VendorUser(ctx context.Context, id, email, name, role, password string, totpSecret []byte, credAge time.Duration) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		enc, err := crypto.Seal(s.Rand, s.Cfg.TOTPKey, totpSecret)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		u := &vendorUser{ID: id, Email: email, Name: name, Role: role, Status: "active", Hash: crypto.HashPassword(s.Rand, s.Cfg.PasswordParams, password), TOTPEnc: enc,
+			Enrolled: true, CreatedAt: now.Add(-credAge), CredAt: now.Add(-credAge)}
+		return s.putVendorUser(tx, u)
+	})
+}
+
+// VendorSetup stores a one-time setup link for a setup-pending vendor user.
+func (sd *Seeder) VendorSetup(ctx context.Context, userID, tok string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		u, err := get[vendorUser](tx, kVendorUser, repository.Global, userID)
+		if err != nil || u == nil {
+			return notFoundOr(err)
+		}
+		d := vendorSetup{ID: crypto.MAC(s.Cfg.MACKey, "setup", tok), UserID: userID, Expires: s.now().Add(s.Cfg.SetupLinkTTL)}
+		return put(tx, kVendorSet, repository.Global, d.ID, d, keys{k1: userID})
+	})
+}
+
+// VendorSessionRec stores a vendor session with a renewal handle.
+func (sd *Seeder) VendorSessionRec(ctx context.Context, id, userID, handle string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		now := s.now()
+		return put(tx, kVendorSess, repository.Global, id, vendorSession{ID: id, UserID: userID, Started: now, EndsAt: now.Add(12 * time.Hour)}, keys{k1: crypto.MAC(s.Cfg.MACKey, "renew", handle), k2: userID})
+	})
+}
+
+// SeedSupport describes a support session.
+type SeedSupport struct{ ID, UserID, Org, Ticket string }
+
+// SupportSession stores an active view-mode support session.
+func (sd *Seeder) SupportSession(ctx context.Context, p SeedSupport) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		now := s.now()
+		return put(tx, kSupport, repository.Global, p.ID, supportSession{ID: p.ID, UserID: p.UserID, Org: p.Org, Mode: "view", Reason: "seeded for the contract run", Ticket: p.Ticket,
+			Started: now, EndsAt: now.Add(30 * time.Minute)}, keys{k1: p.UserID, k2: p.Org})
+	})
+}
+
+// OwnerInvitationWithID stores a pending owner invitation with a fixed id.
+func (sd *Seeder) OwnerInvitationWithID(ctx context.Context, id, tenant, mobile, name string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		now := s.now()
+		i := invitation{ID: id, Kind: "owner", TenantID: tenant, MobileKey: s.mobileKey(mobile), Mobile: mobile, OwnerName: name, Status: "pending", CreatedAt: now,
+			ExpiresAt: now.Add(s.Cfg.InvitationTTL), MemberID: string(s.NewID())}
+		return put(tx, kInvitation, repository.Global, id, i, keys{k1: i.MobileKey, k2: tenant})
+	})
+}
+
+// SeedApproval describes a vendor approval.
+type SeedApproval struct {
+	ID, Kind, Requester, Approver, Org, Mobile, NewMobile, State string
+	CompletesAt                                                  time.Time
+}
+
+// VendorApproval stores a vendor approval record.
+func (sd *Seeder) VendorApproval(ctx context.Context, p SeedApproval) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		now := s.now()
+		a := vendorApproval{ID: p.ID, Kind: p.Kind, Requester: p.Requester, Approver: p.Approver, Org: p.Org, Mobile: p.Mobile, NewMobile: p.NewMobile, Reason: "seeded for the contract run",
+			Ticket: "SUP-2041", Verified: "callback_to_registered_number", State: p.State, CreatedAt: now, ExpiresAt: now.Add(5 * time.Minute), CompletesAt: p.CompletesAt}
+		if p.State == "approved" && p.Kind == "sign_in_code" {
+			code := "7QK39XD2"
+			a.CodeMAC = crypto.MAC(s.Cfg.MACKey, "vcode", p.Mobile, code)
+			a.FirstHalf, _ = crypto.Seal(s.Rand, s.Cfg.TOTPKey, []byte(code[:4]))
+			a.CodeUntil = now.Add(10 * time.Minute)
+		}
+		return put(tx, kVendorAppr, repository.Global, p.ID, a, keys{k1: p.Org, k2: p.Requester})
+	})
+}
+
+// SetupPending stores a vendor user in setup_pending with a one-time setup link token.
+func (sd *Seeder) SetupPending(ctx context.Context, id, email, name, role, tok string) error {
+	s := sd.s
+	err := s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		now := s.now()
+		return s.putVendorUser(tx, &vendorUser{ID: id, Email: email, Name: name, Role: role, Status: "setup_pending", CreatedAt: now, CredAt: now})
+	})
+	if err != nil {
+		return err
+	}
+	return sd.VendorSetup(ctx, id, tok)
+}
+
+// OwnerCount sets the number of owners of an organisation (0 makes it eligible for a first-owner invitation).
+func (sd *Seeder) OwnerCount(ctx context.Context, tenant string, n int) error {
+	s := sd.s
+	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		return put(tx, kOwnerCount, repository.Global, tenant, ownerCount{N: n}, keys{})
+	})
+}

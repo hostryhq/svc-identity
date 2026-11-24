@@ -16,8 +16,11 @@ type catalogueEntry struct {
 
 // NewCatalogue builds the go-auth permission catalogue from the generated entries, with the
 // catalogue lints (strong_only implies owner_grant; support_actable refused on sensitive ones).
-func NewCatalogue() (*auth.Catalogue, error) {
-	ps := make([]auth.Permission, 0, len(catalogueEntries))
+func NewCatalogue(extra ...string) (*auth.Catalogue, error) {
+	ps := make([]auth.Permission, 0, len(catalogueEntries)+len(extra))
+	for _, k := range extra {
+		ps = append(ps, auth.Permission{Name: k, Owner: "product"})
+	}
 	for _, e := range catalogueEntries {
 		ps = append(ps, auth.Permission{Name: e.Key, Owner: e.Service, Sensitive: e.Sensitive, StrongOnly: e.StrongOnly,
 			SupportViewable: e.SupportViewable, SupportActable: e.SupportActable, OwnerGrant: e.OwnerGrant})

@@ -557,7 +557,7 @@ func (s *Service) GetRole(ctx context.Context, id string) (gen.Role, error) {
 func (s *Service) validRolePerms(perms []string) error {
 	seen := map[string]bool{}
 	for _, p := range perms {
-		if _, ok := tenantPermission(p); !ok || seen[p] {
+		if _, ok := tenantPermission(p); (!ok && !contains(s.Cfg.ExtraPermissions, p)) || seen[p] {
 			return errInvalid("permissions", "unknown_permission")
 		}
 		seen[p] = true

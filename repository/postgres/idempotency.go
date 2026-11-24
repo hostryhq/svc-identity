@@ -45,8 +45,12 @@ func (i *Idempotency) Begin(ctx context.Context, tenant ids.ID, key, fp string) 
 
 // Complete stores the response of a started key.
 func (i *Idempotency) Complete(ctx context.Context, tenant ids.ID, key string, r idempotency.Response) error {
+	body := r.Body
+	if body == nil { // a 204 has no body; the column is NOT NULL
+		body = []byte{}
+	}
 	_, err := i.DB.ExecContext(ctx, `UPDATE idempotency_keys SET done=true, status=$3, content_type=$4, body=$5 WHERE tenant_id=$1 AND key=$2`,
-		tenant.String(), key, r.Status, r.ContentType, r.Body)
+		tenant.String(), key, r.Status, r.ContentType, body)
 	return err
 }
 

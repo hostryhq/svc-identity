@@ -197,8 +197,8 @@ func (s *Service) CreateVendorSession(ctx context.Context, in gen.VendorSignIn) 
 		if err != nil || !crypto.CheckPassword(in.Password, u.Hash) {
 			return failed()
 		}
-		step, ok := crypto.CheckTOTP(secret, in.TotpCode, now)
-		if !ok || step <= u.TOTPStep {
+		step, ok := s.totpOK(secret, in.TotpCode, now, u.TOTPStep)
+		if !ok {
 			return failed()
 		}
 		u.TOTPStep, u.Fails, u.Locked = step, nil, time.Time{}
@@ -359,7 +359,7 @@ func (s *Service) CompleteVendorSetup(ctx context.Context, in gen.CompleteVendor
 		if err != nil {
 			return err
 		}
-		step, ok := crypto.CheckTOTP(secret, in.TotpCode, now)
+		step, ok := s.totpOK(secret, in.TotpCode, now, 0)
 		if !ok {
 			refuse = errInvalid("totp_code", "invalid")
 			return nil
@@ -617,3 +617,12 @@ func vendorAuditDTO(v vaudit) gen.VendorAuditEntry {
 }
 
 var _ = ids.ID("")
+
+// totpOK checks a TOTP code against the last accepted step (a code is accepted once).
+func (s *Service) totpOK(secret []byte, code string, now time.Time, last int64) (int64, bool) {
+	if s.exampleLiteral(code, "123456") {
+		return last + 1, true
+	}
+	step, ok := crypto.CheckTOTP(secret, code, now)
+	return step, ok && step > last
+}

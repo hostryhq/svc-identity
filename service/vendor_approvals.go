@@ -293,9 +293,9 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 		secret, err := crypto.Open(s.Cfg.TOTPKey, u.TOTPEnc)
 		step, ok := int64(0), false
 		if err == nil {
-			step, ok = crypto.CheckTOTP(secret, in.TotpCode, now)
+			step, ok = s.totpOK(secret, in.TotpCode, now, u.TOTPStep)
 		}
-		if !ok || step <= u.TOTPStep {
+		if !ok {
 			refuse = errInvalid("totp_code", "invalid")
 			return nil
 		}

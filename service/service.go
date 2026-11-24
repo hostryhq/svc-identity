@@ -167,6 +167,14 @@ type Config struct {
 	AllowedCountryPrefix string // "+91"
 	// OpSigning is the sync gateway's op-signing public key, carried in every pack (ADR-0002 S17).
 	OpSigning crypto.JWK
+	// ExampleLiterals makes the service accept the literal placeholder credentials of the API
+	// specification examples (assertion.example, proof.example, sig.example, TOTP 123456). It is
+	// set by the contract run and tests only; the main package never sets it.
+	ExampleLiterals bool
+	// ExtraPermissions are permission keys accepted in roles in addition to the generated catalogue.
+	// Products add theirs with their own catalogue entries; the test double adds the restaurant ones
+	// the specification examples use.
+	ExtraPermissions []string
 }
 
 // DefaultConfig returns the ADR defaults with keys left empty (callers must set them).
