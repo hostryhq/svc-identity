@@ -37,11 +37,10 @@ var Start = time.Date(2026, 11, 24, 13, 5, 11, 120_000_000, time.UTC)
 
 // Options configure a double.
 type Options struct {
-	// LiteralTokens makes the double issue the spec's literal example tokens ("tok_example_access")
-	// and accept the literal example assertions and proofs. It exists only for the contract run
-	// (the contract requires a double to serve the spec's examples); such a double issues no
-	// verifiable token and must not be used by other services' tests.
-	LiteralTokens bool
+	// ExampleLiterals makes the double accept the literal placeholder credentials of the API
+	// specification's examples ("assertion.example", "proof.example", "sig.example", TOTP 123456), as
+	// the shared contract suite sends them. Tokens it issues are always real and verifiable.
+	ExampleLiterals bool
 	// LogOut receives the structured request log (default: discarded). Used by the redaction test.
 	LogOut io.Writer
 	// Store, AccessLog and Idem replace the in-memory repository, vendor access log and idempotency
@@ -208,8 +207,9 @@ func New(o Options) *Double {
 	}
 	var issuer service.TokenIssuer = signer
 	var assertions service.AssertionVerifier = service.ES256Assertions{}
-	if o.LiteralTokens {
-		issuer = token.Literal{Inner: signer}
+	if o.ExampleLiterals {
+		cfg.ExampleLiterals = true
+		cfg.ExtraPermissions = []string{"order.create", "bill.create", "order.read"}
 		assertions = literalAssertions{inner: assertions}
 	}
 	logOut := o.LogOut

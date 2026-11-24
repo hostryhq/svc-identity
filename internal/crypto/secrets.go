@@ -71,8 +71,9 @@ func (r Random) Alphabet(n int, alphabet string) string {
 	return string(out)
 }
 
-// CodeAlphabet is the 32-symbol alphabet of activation and vendor codes (no 0, O, 1, I, L).
-const CodeAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ_"
+// CodeAlphabet is the 32-symbol alphabet of activation and vendor codes: Crockford base32 without I, L, O, U
+// (the pattern of the activation code in the contract is ^[0-9A-HJKMNP-TV-Z]{8}$).
+const CodeAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 // PinParams are the Argon2id parameters of the PIN derivation (ADR-0005 section 5).
 type PinParams struct {

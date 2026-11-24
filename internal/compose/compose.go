@@ -50,7 +50,7 @@ type Result struct {
 
 // Assemble builds the service, runs its start-up check and builds the HTTP handler.
 func Assemble(p Parts) (*Result, error) {
-	cat, err := service.NewCatalogue()
+	cat, err := service.NewCatalogue(p.Cfg.ExtraPermissions...)
 	if err != nil {
 		return nil, err
 	}
