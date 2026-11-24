@@ -217,7 +217,7 @@ func TestRefreshRotationReuseAndProof(t *testing.T) {
 	if c, _ := refresh(dev, *tp.RefreshToken, "r4"); c != 401 {
 		t.Fatal("session survived refresh-token reuse")
 	}
-	evs := e.d.Store.Events()
+	evs := e.d.Memory.Events()
 	var found bool
 	for _, ev := range evs {
 		found = found || (ev.Type == "identity.session.revoked" && strings.Contains(string(ev.Data), "refresh_reuse"))

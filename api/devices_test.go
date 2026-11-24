@@ -41,7 +41,7 @@ func TestActivationCodeLifecycleAndRegistrationProof(t *testing.T) {
 	}
 	// Event and audit: device.registered is in the outbox.
 	found := false
-	for _, ev := range e.d.Store.Events() {
+	for _, ev := range e.d.Memory.Events() {
 		found = found || ev.Type == "identity.device.registered"
 	}
 	if !found {
@@ -153,7 +153,7 @@ func TestRevokeDeviceDrainTokenAndWipeOrder(t *testing.T) {
 	// Idempotent: a repeat returns the same body; one revoked event only.
 	e.mustJSON(200, "PUT", "/v1/devices/"+dev.ID+"/revocation", tok, gen.RevokeDevice{Reason: gen.RevokeDeviceReasonLost}, &d)
 	n := 0
-	for _, ev := range e.d.Store.Events() {
+	for _, ev := range e.d.Memory.Events() {
 		if ev.Type == "identity.device.revoked" {
 			n++
 		}

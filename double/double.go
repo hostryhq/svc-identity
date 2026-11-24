@@ -20,14 +20,14 @@ import (
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-auth/authtest"
-	"github.com/hostryhq/go-auth/grantlimit"
 	"github.com/hostryhq/go-common/idempotency"
 	"github.com/hostryhq/go-common/ids"
 	"github.com/hostryhq/go-common/testkit"
-	"github.com/hostryhq/svc-identity/api"
+	"github.com/hostryhq/svc-identity/internal/compose"
 	"github.com/hostryhq/svc-identity/internal/crypto"
 	"github.com/hostryhq/svc-identity/internal/nopsql"
 	"github.com/hostryhq/svc-identity/internal/token"
+	"github.com/hostryhq/svc-identity/repository"
 	"github.com/hostryhq/svc-identity/repository/memory"
 	"github.com/hostryhq/svc-identity/service"
 )
@@ -44,6 +44,11 @@ type Options struct {
 	LiteralTokens bool
 	// LogOut receives the structured request log (default: discarded). Used by the redaction test.
 	LogOut io.Writer
+	// Store, AccessLog and Idem replace the in-memory repository, vendor access log and idempotency
+	// store (the integration tests run the same assembly over Postgres). All three or none.
+	Store     repository.Store
+	AccessLog auth.VendorAuditSink
+	Idem      idempotency.Store
 	// Config overrides the default configuration (keys and cheap PIN parameters are filled in).
 	Config func(*service.Config)
 }
@@ -52,7 +57,8 @@ type Options struct {
 type Double struct {
 	Handler  http.Handler
 	Service  *service.Service
-	Store    *memory.Store
+	Store    repository.Store
+	Memory   *memory.Store // nil when Options.Store replaced the in-memory repository
 	Clock    *testkit.FakeClock
 	Signer   *token.Signer
 	Services *authtest.ServiceRegistry
@@ -60,7 +66,7 @@ type Double struct {
 	Notices  *Notices
 	Mail     *Mail
 	Access   *memory.AccessLog
-	Idem     *idempotency.Memory
+	Idem     idempotency.Store
 	Verifier *auth.Verifier
 }
 
@@ -172,9 +178,15 @@ var _ io.Reader = (*seededReader)(nil)
 func New(o Options) *Double {
 	clk := testkit.NewClock()
 	clk.Set(Start)
-	st := memory.New()
-	st.SetAuditDB(nopsql.DB())
+	mem := memory.New()
+	mem.SetAuditDB(nopsql.DB())
 	acc := &memory.AccessLog{}
+	var st repository.Store = mem
+	var accessSink auth.VendorAuditSink = acc
+	var idemStore idempotency.Store = idempotency.NewMemory()
+	if o.Store != nil {
+		st, accessSink, idemStore, mem = o.Store, o.AccessLog, o.Idem, nil
+	}
 	rnd := crypto.Random{R: &seededReader{n: 42}}
 
 	cfg := service.DefaultConfig()
@@ -200,37 +212,20 @@ func New(o Options) *Double {
 		issuer = token.Literal{Inner: signer}
 		assertions = literalAssertions{inner: assertions}
 	}
-	cat, err := service.NewCatalogue()
-	if err != nil {
-		panic(err)
-	}
 	logOut := o.LogOut
 	if logOut == nil {
 		logOut = io.Discard
 	}
-	sms := &SMS{}
-	notes := &Notices{}
-	mailer := &Mail{}
-	ids := clk.IDs()
-	svc := &service.Service{
-		Cfg: cfg, Store: st, Clock: clk, NewID: ids.New, Rand: rnd, SMS: sms, Notify: notes, Mail: mailer, Tokens: issuer, Cat: cat,
-		Grants: grantlimit.Evaluator{Catalogue: cat}, Assertions: assertions, Approvable: api.ApprovableOperation(cat),
-	}
-	if err := svc.StartupCheck(); err != nil {
+	sms, notes, mailer := &SMS{}, &Notices{}, &Mail{}
+	reg := authtest.NewServiceRegistry(clk, "sync", "admin")
+	res, err := compose.Assemble(compose.Parts{
+		Cfg: cfg, Store: st, AccessLog: accessSink, Idem: idemStore, Clock: clk, NewID: clk.IDs().New, Rand: rnd, SMS: sms, Notify: notes, Mail: mailer,
+		Signer: signer, Tokens: issuer, Assertions: assertions, Services: reg.Verifier("identity"), Log: slog.New(slog.NewJSONHandler(logOut, nil)),
+	})
+	if err != nil {
 		panic(err)
 	}
-	reg := authtest.NewServiceRegistry(clk, "sync", "admin")
-	idem := idempotency.NewMemory()
-	verifier := &auth.Verifier{Keys: signer.TenantKeys(), Issuer: token.TenantIssuer, Audience: token.TenantAudience, Realm: auth.RealmTenant, Clock: clk}
-	h := api.New(api.Deps{
-		Svc: svc, Cat: cat,
-		Tenant:    verifier,
-		Vendor:    &auth.Verifier{Keys: signer.VendorKeys(), Issuer: token.VendorIssuer, Audience: token.VendorAudience, Realm: auth.RealmVendor, Clock: clk},
-		Services:  reg.Verifier("identity"),
-		Approvals: &auth.ApprovalChecker{Verifier: &auth.Verifier{Keys: signer.TenantKeys(), Issuer: token.TenantIssuer, Audience: token.TenantAudience, Realm: auth.RealmTenant, Clock: clk}, Used: auth.NewMemorySingleUse(clk)},
-		Audit:     acc, Clock: clk, Idem: idem, Log: slog.New(slog.NewJSONHandler(logOut, nil)),
-	})
-	return &Double{Handler: h, Service: svc, Store: st, Clock: clk, Signer: signer, Services: reg, SMS: sms, Notices: notes, Mail: mailer, Access: acc, Idem: idem, Verifier: verifier}
+	return &Double{Handler: res.Handler, Service: res.Service, Store: st, Memory: mem, Clock: clk, Signer: signer, Services: reg, SMS: sms, Notices: notes, Mail: mailer, Access: acc, Idem: idemStore, Verifier: res.Verifier}
 }
 
 func fixedKey(seed byte, n int) []byte {
