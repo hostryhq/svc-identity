@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/getkin/kin-openapi v0.153.0
-	github.com/hostryhq/api-specs v0.0.0-20261125001959-c92ca77ecb4e
+	github.com/hostryhq/api-specs v0.0.0-20261125021938-5816f025701d
 	github.com/hostryhq/go-auth v0.0.0-20261125015844-755137361bb8
 	github.com/hostryhq/go-common v0.0.0-20261125020101-732c3b1fd21a
 	github.com/hostryhq/svc-tenancy v0.0.0-20261125004647-0084d7fbdcf0
