@@ -281,8 +281,11 @@ func (s *Service) ensureBinding(ctx context.Context, tx repository.Tx, acct *acc
 	if err != nil {
 		return nil, err
 	}
+	thumb := crypto.Thumbprint(key)
 	for i := range all {
-		if all[i].Device != deviceID {
+		// SR-H2: a binding is "this device" only when id AND key match; a known id with a new key
+		// is a new binding under caution (the clone signal of IC-14).
+		if all[i].Device != deviceID || all[i].Thumb != thumb {
 			continue
 		}
 		if all[i].State != "active" {
@@ -290,7 +293,7 @@ func (s *Service) ensureBinding(ctx context.Context, tx repository.Tx, acct *acc
 		}
 		return &all[i], nil
 	}
-	b := binding{ID: string(s.NewID()), AccountID: acct.ID, Device: deviceID, Key: key, Thumb: crypto.Thumbprint(key), CreatedAt: now, State: "active"}
+	b := binding{ID: string(s.NewID()), AccountID: acct.ID, Device: deviceID, Key: key, Thumb: thumb, CreatedAt: now, State: "active"}
 	if len(all) > 0 {
 		b.Caution = now.Add(s.Cfg.CautionWindow)
 		s.Notify.Notify(ctx, Notice{Kind: "new_device", AccountID: acct.ID, DeviceID: deviceID})
