@@ -21,7 +21,7 @@ import (
 const (
 	TenantIssuer   = "hostry-identity"
 	TenantAudience = "hostry-tenant"
-	VendorIssuer   = "hostry-identity-vendor"
+	VendorIssuer   = service.GrantIssuer
 	VendorAudience = "hostry-vendor"
 )
 

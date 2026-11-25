@@ -1,0 +1,65 @@
+{
+  "description": "Vendor approval grant vectors (ADR-0014 A2.6). subject_hash = lower-case hex SHA-256 of the UTF-8 bytes of text; text is the kind and its fields joined by a single newline, no trailing newline. example_grant is a compact JWS (ES256) that verifies under the public key in example_pack and carries the claims shown; it is an example, never a credential.",
+  "subject_hash": [
+    {
+      "kind": "org_suspend",
+      "fields": {
+        "organisation_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60"
+      },
+      "text": "org_suspend\n0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60\nsuspended",
+      "subject_hash": "a82a68b2b885968f5d5cffc10819cb4727232f0f6df3c22e5380f924fd097f74"
+    },
+    {
+      "kind": "org_reinstate",
+      "fields": {
+        "organisation_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60"
+      },
+      "text": "org_reinstate\n0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60\nactive",
+      "subject_hash": "03fda1837d183df2b3b94f37a46c2741c1e37743b3598887009e9451a064f866"
+    },
+    {
+      "kind": "org_close",
+      "fields": {
+        "organisation_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60"
+      },
+      "text": "org_close\n0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60\nclosed",
+      "subject_hash": "4ccdfcbd5d2b912e82dfcbaa4bc85525433bca6d3bd961f32b9a4e0eb60d75c8"
+    },
+    {
+      "kind": "tax_rule_set_publish",
+      "fields": {
+        "rule_set_id": "72bdd3f5-68b5-59b0-8e62-2075a1f43c47",
+        "content_hash": "a3f5c0de9d1b7e44c2f9a8b6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6",
+        "effective_date": "2026-12-15"
+      },
+      "text": "tax_rule_set_publish\n72bdd3f5-68b5-59b0-8e62-2075a1f43c47\na3f5c0de9d1b7e44c2f9a8b6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6\n2026-12-15",
+      "subject_hash": "40bb5637ef1b0ad77bd5ade6050b22c3216c5afd11d57c399059359ca754ca54"
+    }
+  ],
+  "example_pack": {
+    "vendor-realm-1": "BAdpTp8GNt8AIStbF7AQ9sqqkBxoJcxrHiPVn44UlU60ZWGX7Fb2LqEkZQZug1TWSlDQxMZ23ilwXNo-eooRuGg"
+  },
+  "example_grant": {
+    "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InZlbmRvci1yZWFsbS0xIn0.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lmhvc3RyeS5pbnZhbGlkL3ZlbmRvciIsInJlYWxtIjoidmVuZG9yIiwiYXVkIjoidGVuYW5jeSIsInR5cCI6InZlbmRvcl9hcHByb3ZhbCIsImp0aSI6IjAxOTBhMWIyLWMzZDQtN2U1Zi04YTliLTBjMWQyZTNmNGFiMiIsImFwcHJvdmFsX2lkIjoiMDE5MGExYjItYzNkNC03ZTVmLThhOWItMGMxZDJlM2Y0YTZkIiwia2luZCI6Im9yZ19zdXNwZW5kIiwib3JnIjoiMDE5MGExYjItYzNkNC03ZTVmLThhOWItMGMxZDJlM2Y0YTYwIiwicmVxdWVzdGVyIjoiMDE5MGExYjItYzNkNC03ZTVmLThhOWItMGMxZDJlM2Y0YTY2IiwiYXBwcm92ZXIiOiIwMTkwYTFiMi1jM2Q0LTdlNWYtOGE5Yi0wYzFkMmUzZjRhNzgiLCJzdWJqZWN0X2hhc2giOiJhODJhNjhiMmI4ODU5NjhmNWQ1Y2ZmYzEwODE5Y2I0NzI3MjMyZjBmNmRmM2MyMmU1MzgwZjkyNGZkMDk3Zjc0IiwiaWF0IjoxNzk1NTI1NTcxLCJleHAiOjE3OTU1MjU4NzF9.qhs1FZkoNZmloYKP3Fpu35Gl-RxAwRYu4gHfYZfoRfw-kNSChKTpeBh8rmSOU_Dm8bkJZ3pyYP7Mwnm60bC2pA",
+    "header": {
+      "alg": "ES256",
+      "typ": "JWT",
+      "kid": "vendor-realm-1"
+    },
+    "claims": {
+      "iss": "https://identity.hostry.invalid/vendor",
+      "realm": "vendor",
+      "aud": "tenancy",
+      "typ": "vendor_approval",
+      "jti": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4ab2",
+      "approval_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6d",
+      "kind": "org_suspend",
+      "org": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60",
+      "requester": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+      "approver": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a78",
+      "subject_hash": "a82a68b2b885968f5d5cffc10819cb4727232f0f6df3c22e5380f924fd097f74",
+      "iat": 1795525571,
+      "exp": 1795525871
+    }
+  }
+}

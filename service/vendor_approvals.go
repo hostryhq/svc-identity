@@ -2,8 +2,7 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+
 	"strings"
 	"time"
 
@@ -69,17 +68,38 @@ func targetStatus(kind string) string {
 	return ""
 }
 
-// subjectHash binds the grant to what it authorises: organisation id and target status for the org_*
-// kinds; rule-set id, content hash and effective date for tax_rule_set_publish.
-func (a *vendorApproval) subjectHash() string {
-	var parts []string
-	if a.Kind == "tax_rule_set_publish" {
-		parts = []string{a.Kind, a.RuleSetID, a.RuleSetHash, a.Effective}
-	} else {
-		parts = []string{a.Kind, a.Org, targetStatus(a.Kind)}
+// PlatformOrg is the org claim of a grant for a platform-wide action (tax_rule_set_publish), which
+// concerns no organisation. Provisional (founder question O2-9): go-auth's verifier requires a
+// non-empty org, so the platform kinds carry this fixed value and the executing service passes it
+// as the expected org.
+const PlatformOrg = "platform"
+
+// GrantIssuer is the iss claim of a vendor approval grant: identity's vendor realm. The executing
+// service's verifier is configured with the same value (token.VendorIssuer).
+const GrantIssuer = "hostry-identity-vendor"
+
+// grantAudience is the executing service of a grant kind (the aud claim, ADR-0014 A2.6 item 1).
+func grantAudience(kind string) string {
+	if kind == "tax_rule_set_publish" {
+		return "billing"
 	}
-	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return "sha256:" + hex.EncodeToString(sum[:])
+	return "tenancy"
+}
+
+// GrantSubjectHash is the subject hash of ADR-0014 A2.6 item 2: SHA-256, lower-case hex, over the kind
+// and its fields joined by single newlines. org_*: the organisation id and the status the kind sets;
+// tax_rule_set_publish: rule-set id, content hash and effective date (YYYY-MM-DD). Ids and the hash
+// are lower-cased, as the contract fixes lower-case UUID text and lower-case hex. Only the fields of
+// the kind are read.
+func GrantSubjectHash(kind, org, ruleSetID, contentHash, effectiveDate string) string {
+	if kind == "tax_rule_set_publish" {
+		return auth.SubjectHash(kind, strings.ToLower(ruleSetID), strings.ToLower(contentHash), effectiveDate)
+	}
+	return auth.SubjectHash(kind, strings.ToLower(org), targetStatus(kind))
+}
+
+func (a *vendorApproval) subjectHash() string {
+	return GrantSubjectHash(a.Kind, a.Org, a.RuleSetID, a.RuleSetHash, a.Effective)
 }
 
 func (a *vendorApproval) effective(now time.Time) string {
@@ -425,31 +445,21 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 	return out, refuse
 }
 
-// vendorGrantClaims is the claim set of a vendor approval grant (ADR-0014 A1.3): the approval, what
-// it authorises (kind, organisation or none, subject hash) and the two people involved.
-type vendorGrantClaims struct {
-	Issuer      string `json:"iss"`
-	Audience    string `json:"aud"`
-	Subject     string `json:"sub"` // the approval id
-	Realm       string `json:"realm"`
-	Type        string `json:"typ"`
-	Kind        string `json:"kind"`
-	Org         string `json:"org,omitempty"`
-	Requester   string `json:"requester"`
-	Approver    string `json:"approver"`
-	SubjectHash string `json:"subject_hash"`
-	IssuedAt    int64  `json:"iat"`
-	ExpiresAt   int64  `json:"exp"`
-	JTI         string `json:"jti"`
-}
-
-// GrantTTL is the lifetime of a vendor approval grant.
+// GrantTTL is the lifetime of a vendor approval grant (A2.6: exp = iat + 300 seconds).
 const GrantTTL = 5 * time.Minute
 
+// vendorGrant signs the grant of an approved request: a compact ES256 JWS with go-auth's GrantClaims
+// (ADR-0014 A2.6), which go-auth's GrantVerifier checks in the executing service. It records the
+// approval, what it authorises (kind, org, subject hash) and the two people involved.
 func (s *Service) vendorGrant(a *vendorApproval, now time.Time) (gen.VendorApprovalGrant, error) {
 	exp := now.Add(GrantTTL)
-	tok, err := s.Tokens.VendorGrant(vendorGrantClaims{Issuer: "hostry-identity-vendor", Audience: "hostry-vendor", Subject: a.ID, Realm: "vendor", Type: "vendor_approval",
-		Kind: a.Kind, Org: a.Org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(), IssuedAt: now.Unix(), ExpiresAt: exp.Unix(), JTI: string(s.NewID())})
+	org := a.Org
+	if a.Kind == "tax_rule_set_publish" {
+		org = PlatformOrg
+	}
+	tok, err := s.Tokens.VendorGrant(auth.GrantClaims{Issuer: GrantIssuer, Realm: auth.RealmVendor, Audience: grantAudience(a.Kind), Type: auth.GrantType,
+		JTI: string(s.NewID()), ApprovalID: a.ID, Kind: a.Kind, Org: org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(),
+		IssuedAt: now.Unix(), ExpiresAt: exp.Unix()})
 	return gen.VendorApprovalGrant{Token: tok, ExpiresAt: exp}, err
 }
 
