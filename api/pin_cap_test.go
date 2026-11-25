@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -109,5 +110,20 @@ func TestVerifyProofCountsFailuresAndAnswersLocked(t *testing.T) {
 	// The pin grant shares the counter.
 	if c := f.grant(sid2, opened2, f.good(sid2, opened2)); c != 429 {
 		t.Fatalf("pin grant on a pair locked at the gateway: %d", c)
+	}
+}
+
+// SR-H5 (re-review): many distinct wrong proofs on ONE session id each count; the pair locks, and
+// the right proof afterwards is answered locked, never valid.
+func TestVerifyProofDistinctWrongProofsOnOneSessionLock(t *testing.T) {
+	f := newPinFixture(t)
+	opened := f.e.d.Clock.Now()
+	sid := newID()
+	for i := 0; i < 50; i++ {
+		f.verify(sid, opened, fmt.Sprintf("wrong-%d", i))
+	}
+	v := f.verify(sid, opened, f.good(sid, opened))
+	if v.Valid || v.Locked == nil || !*v.Locked {
+		t.Fatalf("right proof after 50 distinct wrong ones must be locked, not valid: %+v", v)
 	}
 }

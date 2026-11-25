@@ -622,11 +622,15 @@ func (s *Service) VerifyProof(ctx context.Context, in gen.ProofVerification) (ge
 			return nil
 		}
 		fail := func(why string) error {
+			// The key includes a digest of the presented proof: each distinct wrong proof counts, an
+			// identical retry does not (SR-H5 re-review).
 			dedupe := ""
+			ph := sha256.Sum256([]byte(in.Proof))
+			digest := crypto.B64(ph[:12])
 			if in.SessionId != nil {
-				dedupe = "s:" + *in.SessionId
+				dedupe = "s:" + *in.SessionId + ":" + digest
 			} else if in.ActionHash != nil {
-				dedupe = "a:" + *in.ActionHash
+				dedupe = "a:" + *in.ActionHash + ":" + digest
 			}
 			for _, seen := range pair.Seen {
 				if dedupe != "" && seen == dedupe {
