@@ -1,0 +1,199 @@
+package service
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"slices"
+	"time"
+
+	auth "github.com/hostryhq/go-auth"
+	"github.com/hostryhq/go-common/apperr"
+	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/gen"
+	"github.com/hostryhq/svc-identity/repository"
+)
+
+type packVer struct {
+	Latest int    `json:"latest"`
+	Digest string `json:"digest"`
+}
+
+// pinDevice reports whether a device kind offers PIN login, and so receives verifiers (IC-16).
+func pinDevice(kind string) bool { return kind == "pos" || kind == "waiter" || kind == "personal" }
+
+// packPermissions returns a member's effective permissions at an outlet: the union of
+// organisation-wide roles and roles for that outlet. The owner wildcard is expanded to the
+// tenant permissions that are not strong_only; strong_only permissions are never exercisable in
+// a pack-based session (ADR-0005 section 5), so they are not carried (IC-20).
+func (s *Service) packPermissions(m *member, roles map[string]*role, outlet string) []string {
+	set := map[string]bool{}
+	for _, a := range m.Assignments {
+		r := roles[a.RoleID]
+		if r == nil || (len(a.Outlets) > 0 && !slices.Contains(a.Outlets, outlet)) {
+			continue
+		}
+		for _, p := range r.Perms {
+			if p == auth.Wildcard {
+				for _, e := range catalogueEntries {
+					if e.Realm == "tenant" && !e.StrongOnly {
+						set[e.Key] = true
+					}
+				}
+				continue
+			}
+			if def, ok := s.Cat.Get(p); ok && !def.StrongOnly {
+				set[p] = true
+			}
+		}
+	}
+	return sortedKeys(set)
+}
+
+func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error) {
+	now := s.now()
+	roles, _, err := s.loadRoles(tx, d.TenantID)
+	if err != nil {
+		return gen.OfflinePack{}, err
+	}
+	ms, err := list[member](tx, kMember, d.TenantID, "", 0)
+	if err != nil {
+		return gen.OfflinePack{}, err
+	}
+	members := []gen.PackMember{}
+	var memberIDs []string
+	for i := range ms {
+		m := &ms[i]
+		if m.Status == "invited" {
+			continue
+		}
+		perms := s.packPermissions(m, roles, d.OutletID)
+		assigned := false
+		for _, a := range m.Assignments {
+			if len(a.Outlets) == 0 || slices.Contains(a.Outlets, d.OutletID) {
+				assigned = true
+			}
+		}
+		if !assigned {
+			continue
+		}
+		pm := gen.PackMember{MemberId: m.ID, DisplayName: m.DisplayName, Status: gen.PackMemberStatus(m.Status), Permissions: perms}
+		if pinDevice(d.Kind) && m.PinVerif != "" {
+			salt, v, bits := m.PinSalt, m.PinVerif, m.PinBits
+			pv := m.PinV
+			pm.PinSalt, pm.PinVerifier, pm.PinV, pm.Vbits = &salt, &v, &pv, &bits
+		}
+		members = append(members, pm)
+		memberIDs = append(memberIDs, m.ID)
+	}
+	ds, err := findK1Devices(tx, d.TenantID, d.OutletID)
+	if err != nil {
+		return gen.OfflinePack{}, err
+	}
+	revoked := []string{}
+	for _, o := range ds {
+		if o.State != "active" {
+			revoked = append(revoked, o.ID)
+		}
+	}
+	series := packSeries(d) // issued by tenancy (the registry is its), stored with the device
+	sum := sha256.New()
+	_ = json.NewEncoder(sum).Encode([]any{members, revoked, series, d.State})
+	digest := crypto.B64(sum.Sum(nil))
+
+	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
+	if err != nil {
+		return gen.OfflinePack{}, err
+	}
+	if pv == nil {
+		pv = &packVer{}
+	}
+	if pv.Digest != digest {
+		pv.Latest++
+		pv.Digest = digest
+		if err := put(tx, kPackVer, d.TenantID, d.ID, pv, keys{}); err != nil {
+			return gen.OfflinePack{}, err
+		}
+		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Series: seriesCodes(d), Digest: digest, At: now}
+		if err := put(tx, kPackHist, d.TenantID, h.ID, h, keys{k1: d.ID}); err != nil {
+			return gen.OfflinePack{}, err
+		}
+	}
+	until := now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour)
+	claims := gen.OfflinePackClaims{CatalogueVersion: CatalogueVersion, IdleLockMinutes: s.Cfg.IdleLockMinutes, IntentTableVersion: 1,
+		IssuedAt: now, Members: members, OfflineValidUntil: until, OrganisationId: d.TenantID, PackV: pv.Latest,
+		RevokedDeviceIds: revoked, Series: series}
+	claims.Device.DeviceId, claims.Device.Kind, claims.Device.OutletId = d.ID, gen.DeviceKind(d.Kind), d.OutletID
+	claims.Device.PublicKey = gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}
+	for _, k := range s.Tokens.JWKS(false) {
+		claims.IdentityPublicKeys = append(claims.IdentityPublicKeys, gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: k.Key.X, Y: k.Key.Y, Kid: k.Kid, Alg: gen.ES256, Use: gen.Sig})
+	}
+	op := s.Cfg.OpSigning
+	claims.OpSigningPublicKey = gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: op.X, Y: op.Y, Kid: "op-1", Alg: gen.ES256, Use: gen.Sig}
+	jws, err := s.Tokens.Pack(claims)
+	if err != nil {
+		return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+	}
+	return gen.OfflinePack{Claims: claims, IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}, nil
+}
+
+func findK1Devices(tx repository.Tx, tenant, outlet string) ([]device, error) {
+	return find[device](tx, kDevice, tenant, outlet)
+}
+
+// GetDeviceOfflinePack returns the newest pack for a device. A device (or a pin session of it) may
+// fetch its own pack; a revoked device gets device_revoked and no pack.
+func (s *Service) GetDeviceOfflinePack(ctx context.Context, id string) (gen.OfflinePack, error) {
+	pr, ok := principal(ctx)
+	if !ok {
+		return gen.OfflinePack{}, errUnauth()
+	}
+	var out gen.OfflinePack
+	s.retryUnverifiedSeries(ctx, pr.TenantID, id)
+	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
+		d, err := get[device](tx, kDevice, pr.TenantID, id)
+		if err != nil || d == nil {
+			return notFoundOr(err)
+		}
+		if pr.DeviceID != id {
+			if err := auth.Require(ctx, "device.read", d.OutletID); err != nil {
+				return errNotFound()
+			}
+		}
+		if d.State != "active" {
+			return apperr.New(apperr.Forbidden, "device_revoked", "the device is revoked")
+		}
+		d.LastSeen = s.now()
+		if err := put(tx, kDevice, pr.TenantID, id, d, keys{k1: d.OutletID}); err != nil {
+			return err
+		}
+		out, err = s.buildPack(tx, d)
+		return err
+	})
+	return out, err
+}
+
+// CheckPackHistory answers the gateway: was this device issued pack_v, did it list the member,
+// was the series code issued to it (judged against the pack held, ADR-0005 section 7).
+func (s *Service) CheckPackHistory(ctx context.Context, in gen.PackHistoryCheck) (gen.PackHistoryVerdict, error) {
+	pr, ok := principal(ctx)
+	if !ok {
+		return gen.PackHistoryVerdict{}, errUnauth()
+	}
+	var out gen.PackHistoryVerdict
+	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
+		h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(in.PackV))
+		if err != nil || h == nil {
+			return err
+		}
+		out.PackKnown = true
+		if in.MemberId != nil {
+			out.MemberInPack = slices.Contains(h.Members, *in.MemberId)
+		}
+		if in.SeriesCode != nil {
+			out.SeriesIssued = slices.Contains(h.Series, *in.SeriesCode)
+		}
+		return nil
+	})
+	return out, err
+}
