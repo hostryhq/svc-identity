@@ -20,6 +20,7 @@ import (
 	"github.com/hostryhq/go-common/clock"
 	"github.com/hostryhq/go-common/outbox"
 	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/devtools"
 	"github.com/hostryhq/svc-identity/internal/tenancyclient"
 	"github.com/hostryhq/svc-identity/internal/token"
 	"github.com/hostryhq/svc-identity/service"
@@ -44,6 +45,8 @@ type config struct {
 	SMS           string // HOSTRY_IDENTITY_SMS: "test" (dev only) ; "real" is not available (no DLT registration yet)
 	AllowTestSMS  bool   // HOSTRY_IDENTITY_ALLOW_TEST_SMS=1: the explicit dev flag
 	AllowConsole  bool   // HOSTRY_IDENTITY_ALLOW_CONSOLE_MAIL=1
+	DevCapture    bool   // HOSTRY_IDENTITY_DEV_CAPTURE=1: /dev/otp and /dev/mail (E1, E3); dev, test and ci only
+	DevClock      bool   // HOSTRY_IDENTITY_DEV_CLOCK=1: /dev/clock moves identity's clock (E2); dev, test and ci only
 	SignInCode    bool   // vendor_assist.signin_code.enabled
 	Recovery      bool   // vendor_assist.recovery.enabled
 	NATSURL       string // HOSTRY_NATS_URL (optional)
@@ -60,6 +63,7 @@ func loadConfig(get func(string) string) (*config, error) {
 		TOTPKeyFile: get("HOSTRY_IDENTITY_TOTP_KEY_FILE"), ServiceKeysDir: get("HOSTRY_SERVICE_KEYS_DIR"), OpSigningPub: get("HOSTRY_OP_SIGNING_PUB_FILE"),
 		TenancyURL: get("HOSTRY_TENANCY_URL"), ServiceSigningKeyFile: get("HOSTRY_SERVICE_SIGNING_KEY_FILE"),
 		SMS: orDefault(get("HOSTRY_IDENTITY_SMS"), "test"), AllowTestSMS: get("HOSTRY_IDENTITY_ALLOW_TEST_SMS") == "1", AllowConsole: get("HOSTRY_IDENTITY_ALLOW_CONSOLE_MAIL") == "1",
+		DevCapture: get("HOSTRY_IDENTITY_DEV_CAPTURE") == "1", DevClock: get("HOSTRY_IDENTITY_DEV_CLOCK") == "1",
 		SignInCode: get("HOSTRY_IDENTITY_VENDOR_SIGNIN_CODE") == "1", Recovery: get("HOSTRY_IDENTITY_VENDOR_RECOVERY") == "1",
 		NATSURL: get("HOSTRY_NATS_URL"), NATSSeedFile: get("HOSTRY_NATS_SEED_FILE"),
 	}
@@ -90,6 +94,15 @@ func loadConfig(get func(string) string) (*config, error) {
 	}
 	if c.SMS == "test" && (!dev || !c.AllowTestSMS) {
 		bad("the test SMS sender needs HOSTRY_ENV in dev, test or ci and HOSTRY_IDENTITY_ALLOW_TEST_SMS=1")
+	}
+	// The development aids use the guard of the test SMS sender: dev, test or ci, and the explicit flag.
+	if c.DevCapture || c.DevClock {
+		if err := devtools.Guard(c.Environment, c.AllowTestSMS); err != nil {
+			bad("HOSTRY_IDENTITY_DEV_CAPTURE and HOSTRY_IDENTITY_DEV_CLOCK: " + err.Error())
+		}
+		if c.SMS != "test" {
+			bad("HOSTRY_IDENTITY_DEV_CAPTURE and HOSTRY_IDENTITY_DEV_CLOCK need the test SMS sender (HOSTRY_IDENTITY_SMS=test)")
+		}
 	}
 	if c.Migrate && !dev {
 		bad("HOSTRY_IDENTITY_AUTO_MIGRATE is for dev only; run `svc-identity migrate`")

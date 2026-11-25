@@ -67,7 +67,7 @@ func run(args []string) error {
 	return fmt.Errorf("unknown command %q", args[0])
 }
 
-func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Result, *postgres.Store, error) {
+func assemble(ctx context.Context, cfg *config, log *slog.Logger, aids *devAids) (*compose.Result, *postgres.Store, error) {
 	st, err := postgres.Open(ctx, cfg.DSN, cfg.DBRole)
 	if err != nil {
 		return nil, nil, err
@@ -94,9 +94,19 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 	if err != nil {
 		return nil, nil, err
 	}
+	var clk clock.Clock = clock.System
+	var mail service.MailSender = terminalMail{}
+	if aids.capture != nil { // E1, E3: codes and setup links are readable from /dev/, never from logs
+		sms, mail = aids.capture, aids.capture.Mail()
+		log.Warn("DEV CAPTURE is on: sign-in codes and setup links are readable at /dev/otp and /dev/mail")
+	}
+	if aids.clock != nil { // E2
+		clk = aids.clock
+		log.Warn("DEV CLOCK is on: identity's clock can be moved at /dev/clock; tokens issued meanwhile are not valid at other services")
+	}
 	res, err := compose.Assemble(compose.Parts{
-		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB(), Role: cfg.DBRole}, Idem: postgres.NewIdempotency(st), Clock: clock.System,
-		NewID: ids.New, Rand: crypto.System, SMS: sms, Notify: logNotifier{log}, Mail: terminalMail{}, Signer: signer,
+		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB(), Role: cfg.DBRole}, Idem: postgres.NewIdempotency(st), Clock: clk,
+		NewID: ids.New, Rand: crypto.System, SMS: sms, Notify: logNotifier{log}, Mail: mail, Signer: signer,
 		Services: reg, Tenancy: ten, Log: log, Health: hc, SMSAsync: true,
 	})
 	return res, st, err
@@ -104,7 +114,8 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 
 func serve(ctx context.Context, cfg *config) error {
 	log := logx.New(os.Stderr, slog.LevelInfo, "identity")
-	res, st, err := assemble(ctx, cfg, log)
+	aids := cfg.devAids()
+	res, st, err := assemble(ctx, cfg, log, aids)
 	if err != nil {
 		return err
 	}
@@ -151,7 +162,11 @@ func serve(ctx context.Context, cfg *config) error {
 			}
 		}
 	}()
-	srv := &http.Server{Addr: cfg.Listen, Handler: res.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+	handler, err := aids.handler(cfg, res.Handler)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Addr: cfg.Listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	log.Info("identity listening", "addr", cfg.Listen, "environment", cfg.Environment)
@@ -203,7 +218,7 @@ func vendorCmd(ctx context.Context, cfg *config, args []string) error {
 		}
 	}
 	log := logx.New(os.Stderr, slog.LevelWarn, "identity")
-	res, st, err := assemble(ctx, cfg, log)
+	res, st, err := assemble(ctx, cfg, log, &devAids{})
 	if err != nil {
 		return err
 	}
