@@ -27,6 +27,9 @@ type Tenancy interface {
 	// ErrOutletUnknown for an outlet that does not exist in the tenant and an Unavailable apperr
 	// (code tenancy.unavailable) when tenancy cannot answer.
 	OutletBrand(ctx context.Context, tenant, outlet string) (string, error)
+	// Entitlements reads the organisation's entitlement snapshot (getEntitlements; ADR-0014 T10). An Unavailable apperr
+	// (code tenancy.unavailable) when tenancy cannot answer.
+	Entitlements(ctx context.Context, tenant string) (gen.EntitlementSnapshot, error)
 }
 
 // ManualBook is a registered paper bill book of an outlet.

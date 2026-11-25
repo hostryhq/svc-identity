@@ -45,17 +45,18 @@ const (
 	kRecovery   = "owner_recovery"
 	kOwnerCount = "owner_count" // global: owners per organisation, for the last-owner rule
 
-	kMember    = "member"          // tenant
-	kRole      = "role"            // tenant
-	kDevice    = "device"          // tenant
-	kPackHist  = "pack_hist"       // tenant: pack versions issued per device
-	kPinSess   = "pin_sess"        // tenant: pin sessions (sid ownership)
-	kPinReset  = "pin_reset"       // tenant: PIN reset authorisations
-	kSeqCtr    = "seq"             // tenant: per-aggregate event sequence
-	kPackVer   = "pack_ver"        // tenant: latest pack_v per device
-	kProofFail = "proof_fail"      // tenant: pin-grant failure counters
-	kPackGrant = "pack_grants"     // tenant: permission sets of issued packs, once per digest (ADR-0005 A3.2)
-	kDevRecov  = "device_recovery" // tenant: key-loss recovery records, K1 = the old device id
+	kMember       = "member"          // tenant
+	kRole         = "role"            // tenant
+	kDevice       = "device"          // tenant
+	kPackHist     = "pack_hist"       // tenant: pack versions issued per device
+	kPinSess      = "pin_sess"        // tenant: pin sessions (sid ownership)
+	kPinReset     = "pin_reset"       // tenant: PIN reset authorisations
+	kSeqCtr       = "seq"             // tenant: per-aggregate event sequence
+	kPackVer      = "pack_ver"        // tenant: latest pack_v per device
+	kProofFail    = "proof_fail"      // tenant: pin-grant failure counters
+	kPackGrant    = "pack_grants"     // tenant: permission sets of issued packs, once per digest (ADR-0005 A3.2)
+	kDevRecov     = "device_recovery" // tenant: key-loss recovery records, K1 = the old device id
+	kEntitlements = "entitlements"    // tenant: last entitlement snapshot read from tenancy, id = tenant (ADR-0014 T10)
 )
 
 func init() {

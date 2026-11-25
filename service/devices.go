@@ -485,9 +485,9 @@ func (s *Service) redeemRecovery(ctx context.Context, tx repository.Tx, tenant s
 }
 
 func recoveryDTO(r *deviceRecovery) gen.DeviceRecovery {
-	state := gen.Open
+	state := gen.DeviceRecoveryStateOpen
 	if r.Closed {
-		state = gen.Closed
+		state = gen.DeviceRecoveryStateClosed
 	}
 	return gen.DeviceRecovery{Id: r.ID, OldDeviceId: r.OldDeviceID, NewDeviceId: r.NewDeviceID, ApproverId: r.ApproverID, RecoveredAt: r.RecoveredAt, State: state}
 }

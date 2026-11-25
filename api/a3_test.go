@@ -183,7 +183,7 @@ func TestKeyLossDrainIsSignedByTheAdoptingDevice(t *testing.T) {
 
 	var r gen.DeviceRecovery
 	e.mustJSON(200, "GET", "/internal/v1/devices/"+oldDev.ID+"/recovery", "", nil, &r, "Hostry-Service-Token", e.d.ServiceToken("sync", org))
-	if r.Id != rec || r.State != gen.Closed || r.NewDeviceId != newDev.ID {
+	if r.Id != rec || r.State != gen.DeviceRecoveryStateClosed || r.NewDeviceId != newDev.ID {
 		t.Fatalf("recovery: %+v", r)
 	}
 	e.d.Clock.Advance(16 * time.Minute)
@@ -226,7 +226,7 @@ func TestDirectoryCredentialRecoveryAndRevocationReason(t *testing.T) {
 	e.mustJSON(200, "GET", "/internal/v1/devices/"+oldDev.ID+"/credential", "", nil, &c, svc(org.String())...) // any state
 	var r gen.DeviceRecovery
 	e.mustJSON(200, "GET", "/internal/v1/devices/"+oldDev.ID+"/recovery", "", nil, &r, svc(org.String())...)
-	if r.State != gen.Open || r.ApproverId != owner.MemberId {
+	if r.State != gen.DeviceRecoveryStateOpen || r.ApproverId != owner.MemberId {
 		t.Fatalf("recovery: %+v", r)
 	}
 	e.expect(404, "", "GET", "/internal/v1/devices/"+oldDev.ID+"/recovery", "", nil, svc(newID())...)

@@ -4,10 +4,10 @@ go 1.27
 
 require (
 	github.com/getkin/kin-openapi v0.153.0
-	github.com/hostryhq/api-specs v0.0.0-20261125082742-14c76fdb9ac1
+	github.com/hostryhq/api-specs v0.0.0-20261125095947-6829f594d930
 	github.com/hostryhq/go-auth v0.0.0-20261125030157-94f1970efd79
 	github.com/hostryhq/go-common v0.0.0-20261125032613-92884d6c83f8
-	github.com/hostryhq/svc-tenancy v0.0.0-20261125083102-f5629bc00772
+	github.com/hostryhq/svc-tenancy v0.0.0-20261125100105-33e2db4a3133
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/oapi-codegen/runtime v1.9.1
 	golang.org/x/crypto v0.57.0

@@ -209,7 +209,7 @@ func startConsumers(ctx context.Context, cfg *config, st *postgres.Store, svc *s
 		log.Error("consumer: connect to the bus", "error", err)
 		return
 	}
-	handle := func(ctx context.Context, _ *sql.Tx, e events.Envelope) error { return svc.ConsumeVendorAccess(ctx, e) }
+	handle := func(ctx context.Context, _ *sql.Tx, e events.Envelope) error { return svc.ConsumeTenancy(ctx, e) }
 	for _, publisher := range []string{"tenancy", "billing"} {
 		c, err := bus.BindConsumer(ctx, nc, publisher, "identity")
 		if err != nil {

@@ -122,7 +122,7 @@ func TestKeyLossRecoveryCodeRedeemedAtActivation(t *testing.T) {
 
 	newDev := double.NewDevice(newID())
 	act := e.redeem(second.Code, newDev, 201)
-	if act.Recovery == nil || act.Recovery.OldDeviceId != oldDev.ID || act.Recovery.NewDeviceId != newDev.ID || act.Recovery.State != gen.Open {
+	if act.Recovery == nil || act.Recovery.OldDeviceId != oldDev.ID || act.Recovery.NewDeviceId != newDev.ID || act.Recovery.State != gen.DeviceRecoveryStateOpen {
 		t.Fatalf("recovery: %+v", act.Recovery)
 	}
 	if act.Device.Kind != gen.Pos || act.OfflinePack.Claims.Device.OutletId != tenOutlet || act.OfflinePack.Claims.Device.BrandId != tenBrand {
@@ -142,7 +142,7 @@ func TestKeyLossRecoveryCodeRedeemedAtActivation(t *testing.T) {
 	}
 	var r gen.DeviceRecovery
 	e.mustJSON(200, "GET", "/internal/v1/devices/"+oldDev.ID+"/recovery", "", nil, &r, "Hostry-Service-Token", e.d.ServiceToken("sync", orgID(tenOrg)))
-	if r.NewDeviceId != newDev.ID || r.State != gen.Open {
+	if r.NewDeviceId != newDev.ID || r.State != gen.DeviceRecoveryStateOpen {
 		t.Fatalf("record: %+v", r)
 	}
 	// The code is single use and the device is recovered once; a revoked device cannot be recovered.

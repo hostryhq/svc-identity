@@ -96,10 +96,18 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 			revoked = append(revoked, o.ID)
 		}
 	}
-	series := packSeries(d)        // issued by tenancy (the registry is its), stored with the device
-	books := s.manualBooks(ctx, d) // entry-only paper books of the outlet, from tenancy (A1.6 item 4)
+	series := packSeries(d)                             // issued by tenancy (the registry is its), stored with the device
+	books := s.manualBooks(ctx, d)                      // entry-only paper books of the outlet, from tenancy (A1.6 item 4)
+	ent, err := s.packEntitlements(ctx, tx, d.TenantID) // nil until tenancy has answered once; never blocks a pack (ADR-0014 T10)
+	if err != nil {
+		return gen.OfflinePack{}, err
+	}
 	sum := sha256.New()
-	_ = json.NewEncoder(sum).Encode([]any{members, revoked, series, d.State, books})
+	digestParts := []any{members, revoked, series, d.State, books}
+	if ent != nil { // appended only when present, so a pack without a snapshot keeps its earlier digest
+		digestParts = append(digestParts, ent.EntitlementsV)
+	}
+	_ = json.NewEncoder(sum).Encode(digestParts)
 	digest := crypto.B64(sum.Sum(nil))
 
 	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
@@ -139,6 +147,7 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	if len(books) > 0 {
 		claims.ManualBooks = &books
 	}
+	claims.Entitlements = ent
 	if d.BrandID == "" && s.Tenancy != nil { // a row from before ADR-0014 A3.4 that the backfill has not reached
 		return gen.OfflinePack{}, errBrandUnknown()
 	}

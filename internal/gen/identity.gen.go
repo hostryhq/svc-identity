@@ -312,16 +312,16 @@ func (e DeviceKind) Valid() bool {
 
 // Defines values for DeviceRecoveryState.
 const (
-	Closed DeviceRecoveryState = "closed"
-	Open   DeviceRecoveryState = "open"
+	DeviceRecoveryStateClosed DeviceRecoveryState = "closed"
+	DeviceRecoveryStateOpen   DeviceRecoveryState = "open"
 )
 
 // Valid indicates whether the value is a known member of the DeviceRecoveryState enum.
 func (e DeviceRecoveryState) Valid() bool {
 	switch e {
-	case Closed:
+	case DeviceRecoveryStateClosed:
 		return true
-	case Open:
+	case DeviceRecoveryStateOpen:
 		return true
 	default:
 		return false
@@ -382,6 +382,30 @@ func (e DeviceTokenTyp) Valid() bool {
 	case DeviceTokenTypDevice:
 		return true
 	case DeviceTokenTypPin:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EntitlementSnapshotOrganisationStatus.
+const (
+	EntitlementSnapshotOrganisationStatusActive    EntitlementSnapshotOrganisationStatus = "active"
+	EntitlementSnapshotOrganisationStatusClosed    EntitlementSnapshotOrganisationStatus = "closed"
+	EntitlementSnapshotOrganisationStatusSuspended EntitlementSnapshotOrganisationStatus = "suspended"
+	EntitlementSnapshotOrganisationStatusTrial     EntitlementSnapshotOrganisationStatus = "trial"
+)
+
+// Valid indicates whether the value is a known member of the EntitlementSnapshotOrganisationStatus enum.
+func (e EntitlementSnapshotOrganisationStatus) Valid() bool {
+	switch e {
+	case EntitlementSnapshotOrganisationStatusActive:
+		return true
+	case EntitlementSnapshotOrganisationStatusClosed:
+		return true
+	case EntitlementSnapshotOrganisationStatusSuspended:
+		return true
+	case EntitlementSnapshotOrganisationStatusTrial:
 		return true
 	default:
 		return false
@@ -1992,6 +2016,52 @@ type DrainToken struct {
 	ExpiresAt Timestamp `json:"expires_at"`
 }
 
+// EntitlementSnapshot What an organisation is entitled to at one moment (ADR-0003 section 7, ADR-0008 S5), the shape carried by tenancy `getEntitlements` and by the `entitlements` claim of the offline pack. It never gates trading (ADR-0014 T10): an absent, stale or expired snapshot changes which optional features an app offers, never whether a sale, print or day close completes. Billing state (overdue, unpaid) is not part of it.
+type EntitlementSnapshot struct {
+	// AsOf Instant the snapshot was read from tenancy, UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	AsOf time.Time `json:"as_of"`
+
+	// EntitlementsV Version of the snapshot, per organisation, increased by every plan change and every organisation status change. A device keeps the highest version it has seen.
+	//
+	// Example: 3
+	EntitlementsV int `json:"entitlements_v"`
+
+	// Features Feature keys granted, sorted. An app ignores a key it does not know and treats a key that is not listed as not granted.
+	Features []string `json:"features"`
+
+	// Limits Quantities the plan includes, by name. Informational on a device, a limit is never enforced against a sale. Unknown names are ignored.
+	//
+	// Example: {"outlets":1}
+	Limits map[string]int `json:"limits"`
+
+	// OrganisationStatus Lifecycle status of the organisation. `suspended` takes effect on a device only when it holds no day in progress (ADR-0014 A1.2, BR-A1-71).
+	//
+	// Example: active
+	OrganisationStatus EntitlementSnapshotOrganisationStatus `json:"organisation_status"`
+
+	// PlanKey Plan key of the current subscription. Absent when the organisation has no subscription.
+	//
+	// Example: table_service
+	PlanKey *string `json:"plan_key,omitempty"`
+
+	// PlanVersion Plan version of the current subscription. Absent when there is no subscription.
+	//
+	// Example: 1
+	PlanVersion *int `json:"plan_version,omitempty"`
+
+	// ValidUntil Instant after which the snapshot is stale and the device refreshes it when online. Absent in A1 because plan entitlements carry no expiry (BR-A1-61). Stale never removes a feature or blocks trading.
+	//
+	// Example: 2026-12-31T00:00:00Z
+	ValidUntil *time.Time `json:"valid_until,omitempty"`
+}
+
+// EntitlementSnapshotOrganisationStatus Lifecycle status of the organisation. `suspended` takes effect on a device only when it holds no day in progress (ADR-0014 A1.2, BR-A1-71).
+//
+// Example: active
+type EntitlementSnapshotOrganisationStatus string
+
 // Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 //
 // Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
@@ -2236,6 +2306,9 @@ type OfflinePackClaims struct {
 		// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
 		PublicKey PublicJwk `json:"public_key"`
 	} `json:"device"`
+
+	// Entitlements The organisation's entitlement snapshot when the pack was issued (tenancy `getEntitlements`), refreshed into a newer pack on `tenancy.subscription.changed`. Optional so an older pack still validates; an app treats an absent snapshot as "no optional feature known" and still trades (ADR-0014 T10). Never gates a sale, print or day close.
+	Entitlements *EntitlementSnapshot `json:"entitlements,omitempty"`
 
 	// IdentityPublicKeys Current and next identity public keys.
 	IdentityPublicKeys []Jwk `json:"identity_public_keys"`

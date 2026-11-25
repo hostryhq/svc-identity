@@ -17,6 +17,7 @@ import (
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-common/apperr"
+	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/internal/gen/tenancy"
 	"github.com/hostryhq/svc-identity/service"
 )
@@ -204,4 +205,51 @@ func problemCode(body []byte) string {
 	}
 	_ = json.Unmarshal(body, &p)
 	return p.Code
+}
+
+// Entitlements reads the organisation's entitlement snapshot (getEntitlements, ADR-0014 T10). One bounded retry
+// with jitter on a transport failure or a 502, 503 or 504; a read, so a retry repeats nothing.
+func (c *Client) Entitlements(ctx context.Context, tenant string) (gen.EntitlementSnapshot, error) {
+	var resp *tenancy.GetEntitlementsResponse
+	for attempt := 0; attempt < 2; attempt++ {
+		var err error
+		resp, err = c.entitlements(ctx, tenant)
+		if err == nil && resp.StatusCode() != http.StatusBadGateway && resp.StatusCode() != http.StatusServiceUnavailable && resp.StatusCode() != http.StatusGatewayTimeout {
+			break
+		}
+		resp = nil
+		if attempt == 0 {
+			select {
+			case <-time.After(time.Duration(50+rand.IntN(100)) * time.Millisecond):
+			case <-ctx.Done():
+				return gen.EntitlementSnapshot{}, unavailable()
+			}
+		}
+	}
+	if resp == nil || resp.JSON200 == nil {
+		return gen.EntitlementSnapshot{}, unavailable()
+	}
+	e := resp.JSON200
+	out := gen.EntitlementSnapshot{AsOf: e.AsOf, EntitlementsV: e.EntitlementsV, Features: e.Features, Limits: e.Limits,
+		OrganisationStatus: gen.EntitlementSnapshotOrganisationStatus(e.OrganisationStatus), PlanKey: e.PlanKey, PlanVersion: e.PlanVersion, ValidUntil: e.ValidUntil}
+	if out.Features == nil {
+		out.Features = []string{}
+	}
+	if out.Limits == nil {
+		out.Limits = map[string]int{}
+	}
+	return out, nil
+}
+
+func (c *Client) entitlements(ctx context.Context, tenant string) (*tenancy.GetEntitlementsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	tok, err := c.signer.Sign(Audience, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return c.c.GetEntitlementsWithResponse(ctx, func(_ context.Context, r *http.Request) error {
+		r.Header.Set(auth.ServiceTokenHeader, tok)
+		return nil
+	})
 }
