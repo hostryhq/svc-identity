@@ -66,6 +66,11 @@ HOSTRY_PG_DSN=postgres://hostry:hostry-dev-only@127.0.0.1:55442/hostry?sslmode=d
   go test -race -tags integration ./integration/... ./contract/...    # on the infra dev stack (Postgres 17)
 ```
 
+The contract suite reads the spec from `HOSTRY_API_SPECS` (a checkout root); unset, it uses the sibling `api-specs-p2`
+checkout when present, else `api-specs`. The bus startup test (`cmd/svc-identity/main_bus_integration_test.go`,
+`-tags integration`) starts NATS from `infra/dev/compose.yaml` under its own project and port (`HOSTRY_INFRA_DIR`,
+`HOSTRY_EVENTS_DIR` override the sibling defaults; it skips without Docker) and needs the Postgres of `HOSTRY_PG_DSN`.
+
 The contract suite (`contract/`) runs `api-specs/contracttest` once per operation in a fresh target, which the
 harness puts into the operation's example world (`SeedWorld`, `contract/worlds.go`: base, session-open,
 device-revoked, vendor-approval-pending and the rest of `info.x-example-worlds`), against the double and against

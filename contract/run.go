@@ -14,12 +14,17 @@ import (
 	"github.com/hostryhq/svc-identity/service"
 )
 
-// SpecPath is the identity OpenAPI document of the api-specs checkout (HOSTRY_API_SPECS selects it).
+// SpecPath is the identity OpenAPI document of the api-specs checkout (HOSTRY_API_SPECS selects it). Without
+// it the sibling api-specs-p2 checkout (the one go.work uses) is taken when present, else api-specs.
 func SpecPath() string {
+	const rel = "/openapi/identity/v1/openapi.yaml"
 	if v := os.Getenv("HOSTRY_API_SPECS"); v != "" {
-		return v + "/openapi/identity/v1/openapi.yaml"
+		return v + rel
 	}
-	return "../../api-specs/openapi/identity/v1/openapi.yaml"
+	if _, err := os.Stat("../../api-specs-p2" + rel); err == nil {
+		return "../../api-specs-p2" + rel
+	}
+	return "../../api-specs" + rel
 }
 
 // Operation is one operation of the specification with what the run needs to know about it.
