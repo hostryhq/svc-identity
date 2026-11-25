@@ -90,6 +90,16 @@ func (s *Service) CreateActivationCode(ctx context.Context, in gen.CreateActivat
 	return gen.ActivationCode{Id: doc.ID, Code: code, OutletId: in.OutletId, Kind: in.Kind, ExpiresAt: doc.Expires}, err
 }
 
+// errDeviceUnavailable is the neutral refusal for a device id that already exists in any tenant or
+// state: it says nothing about whose it is.
+func errDeviceUnavailable() error {
+	return apperr.New(apperr.Conflict, "device_id_unavailable", "the device id is not available")
+}
+
+func errDeviceRevoked() error {
+	return apperr.New(apperr.Conflict, "device_revoked", "this device was revoked and cannot be registered again; register a new device")
+}
+
 func jwkOf(k gen.PublicJwk) crypto.JWK {
 	return crypto.JWK{Kty: string(k.Kty), Crv: string(k.Crv), X: k.X, Y: k.Y}
 }
@@ -190,9 +200,16 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 		if d, err := get[device](tx, kDevice, tenant, in.Id); err != nil {
 			return err
 		} else if d != nil {
+			// M2: only a replay of this very activation (same activation id and key) gets the pack back.
+			if d.Activation != ac.ID || d.Thumb != crypto.Thumbprint(key) {
+				return apperr.New(apperr.Validation, "activation_code_invalid", "the activation could not be completed")
+			}
+			if d.State != "active" {
+				return errDeviceRevoked()
+			}
 			dev = d
 		} else {
-			dev, err = s.createDevice(ctx, tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), in.Id, key, "", ac.By)
+			dev, err = s.createDevice(ctx, tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), in.Id, key, "", ac.By, ac.ID)
 			if err != nil {
 				return err
 			}
@@ -216,10 +233,29 @@ func (s *Service) activationFor(tx repository.Tx, code string) (*activationDoc, 
 }
 
 // createDevice stores a new active device, refusing a key already bound to an active device.
-func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, outlet, kind, name, keyProt, id string, key crypto.JWK, accountID, actorID string) (*device, error) {
+func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, outlet, kind, name, keyProt, id string, key crypto.JWK, accountID, actorID, activationID string) (*device, error) {
 	now := s.now()
 	d := &device{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, Name: name, State: "active", KeyProt: keyProt,
-		Billing: billingFor(kind), Key: key, Thumb: crypto.Thumbprint(key), AccountID: accountID, CreatedAt: now}
+		Billing: billingFor(kind), Key: key, Thumb: crypto.Thumbprint(key), AccountID: accountID, Activation: activationID, CreatedAt: now}
+	// SR-H3: device ids are chosen by clients, so the global index is insert-only: an id that exists
+	// in any tenant and any state is refused, never overwritten or reactivated. The key is unique too.
+	taken, err := get[struct {
+		TenantID string `json:"tenant_id"`
+	}](tx, kDeviceIdx, repository.Global, id)
+	if err != nil {
+		return nil, err
+	}
+	if taken != nil {
+		return nil, errDeviceUnavailable()
+	}
+	if err := create(tx, kDeviceIdx, repository.Global, id, struct {
+		TenantID string `json:"tenant_id"`
+	}{tenant}, keys{k1: d.Thumb, unique: true}); err != nil {
+		if err == repository.ErrConflict { // a concurrent insert of the id, or the key is bound to an active device
+			return nil, apperr.New(apperr.Validation, "activation_code_invalid", "the device could not be registered")
+		}
+		return nil, err
+	}
 	series, unverified, err := s.issueSeriesFor(ctx, tenant, outlet, id, kind)
 	if err != nil {
 		return nil, err
@@ -228,15 +264,10 @@ func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, ou
 	if unverified {
 		d.RegUnverified, d.Billing = true, "none"
 	}
-	if err := put(tx, kDeviceIdx, repository.Global, id, struct {
-		TenantID string `json:"tenant_id"`
-	}{tenant}, keys{k1: d.Thumb, unique: true}); err != nil {
+	if err := create(tx, kDevice, tenant, id, d, keys{k1: outlet}); err != nil {
 		if err == repository.ErrConflict {
-			return nil, apperr.New(apperr.Validation, "activation_code_invalid", "the device could not be registered")
+			return nil, errDeviceUnavailable()
 		}
-		return nil, err
-	}
-	if err := put(tx, kDevice, tenant, id, d, keys{k1: outlet}); err != nil {
 		return nil, err
 	}
 	if err := s.emit(tx, tenant, outlet, "identity.device.registered", id, actorID,
@@ -263,7 +294,13 @@ func (s *Service) RegisterDevice(ctx context.Context, in gen.RegisterDevice) (ge
 	err := s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
 		if d, err := get[device](tx, kDevice, p.TenantID, in.Id); err != nil {
 			return err
-		} else if d != nil && d.Thumb == crypto.Thumbprint(key) {
+		} else if d != nil {
+			if d.Thumb != crypto.Thumbprint(key) {
+				return errDeviceUnavailable()
+			}
+			if d.State != "active" { // SR-H3: revocation is terminal
+				return errDeviceRevoked()
+			}
 			out = deviceDTO(d)
 			return nil
 		}
@@ -277,7 +314,7 @@ func (s *Service) RegisterDevice(ctx context.Context, in gen.RegisterDevice) (ge
 				acct = m.AccountID
 			}
 		}
-		d, err := s.createDevice(ctx, tx, p.TenantID, in.OutletId, string(in.Kind), in.Name, string(in.KeyProtection), in.Id, key, acct, p.Subject)
+		d, err := s.createDevice(ctx, tx, p.TenantID, in.OutletId, string(in.Kind), in.Name, string(in.KeyProtection), in.Id, key, acct, p.Subject, "")
 		if err != nil {
 			return err
 		}

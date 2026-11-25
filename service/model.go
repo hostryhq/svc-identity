@@ -124,7 +124,8 @@ type device struct {
 	Billing    string     `json:"billing_capability"`
 	Key        crypto.JWK `json:"key"`
 	Thumb      string     `json:"thumb"`
-	AccountID  string     `json:"account_id,omitempty"` // personal devices: the holder
+	AccountID  string     `json:"account_id,omitempty"`    // personal devices: the holder
+	Activation string     `json:"activation_id,omitempty"` // the activation code that registered it (M2)
 	CreatedAt  time.Time  `json:"registered_at"`
 	LastSeen   time.Time  `json:"last_contact_at,omitempty"`
 	RevokedAt  time.Time  `json:"revoked_at,omitempty"`

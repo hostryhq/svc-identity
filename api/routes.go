@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"strings"
 	"time"
 
 	auth "github.com/hostryhq/go-auth"
@@ -119,19 +120,60 @@ func Operations() []string {
 	return out
 }
 
-// ApprovableOperation reports whether an operation may be filed for new-device approval: a
-// strong_only or step-up operation of the tenant realm (A2.2 item 3).
-func ApprovableOperation(cat *auth.Catalogue) func(string) bool {
-	set := map[string]bool{}
+// ApprovableOperation says whether a request may be filed for new-device approval: a strong_only or
+// step-up operation of the tenant realm (A2.2 item 3) whose method and concrete path are those of
+// the named operation (SR-H1). On success it returns the human-readable subject shown to the
+// approver, built from the operation id and the path parameters, not from requester text.
+func ApprovableOperation(cat *auth.Catalogue) func(op, method, path string) (string, bool) {
+	type route struct{ method, pattern string }
+	set := map[string]route{}
 	for _, r := range routeTable {
 		if r.Callers != nil {
 			continue
 		}
 		if p, ok := cat.Get(r.Permission); ok && (p.StrongOnly || r.StepUp) {
-			set[r.Op] = true
+			if m, pat, ok := strings.Cut(r.Pattern, " "); ok {
+				set[r.Op] = route{m, pat}
+			}
 		}
 	}
-	return func(op string) bool { return set[op] }
+	return func(op, method, path string) (string, bool) {
+		rt, ok := set[op]
+		if !ok || rt.method != method {
+			return "", false
+		}
+		want, got := strings.Split(rt.pattern, "/"), strings.Split(path, "/")
+		if len(want) != len(got) {
+			return "", false
+		}
+		subject := humanOp(op)
+		for i := range want {
+			if strings.HasPrefix(want[i], "{") {
+				if got[i] == "" || strings.ContainsAny(got[i], " ?#%\\") {
+					return "", false
+				}
+				subject += ", " + strings.ReplaceAll(strings.Trim(want[i], "{}"), "_", " ") + " " + got[i]
+			} else if want[i] != got[i] {
+				return "", false
+			}
+		}
+		return subject, true
+	}
+}
+
+// humanOp turns an operationId such as removeOwnerRole into "Remove owner role".
+func humanOp(op string) string {
+	var b strings.Builder
+	for i, r := range op {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			b.WriteByte(' ')
+			r += 'a' - 'A'
+		} else if i == 0 && r >= 'a' && r <= 'z' {
+			r -= 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // guardRouter satisfies gen.ServeMux: the generated code registers each pattern here and we wrap

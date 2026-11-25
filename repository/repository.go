@@ -39,6 +39,9 @@ type Record struct {
 type Tx interface {
 	Get(kind, scope, id string) (Record, bool, error)
 	Put(r Record) error
+	// Create inserts a record and fails with ErrConflict when (kind, scope, id) already exists. Use it
+	// where an id is chosen by a client and an upsert would overwrite another record (SR-H3).
+	Create(r Record) error
 	Delete(kind, scope, id string) error
 	// FindK1 returns records of the kind and scope whose K1 equals k, ordered by id.
 	FindK1(kind, scope, k string) ([]Record, error)

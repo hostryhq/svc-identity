@@ -23,6 +23,9 @@ type approvalReq struct {
 	Session   string    `json:"session"`
 	Operation string    `json:"operation"`
 	BodyHash  string    `json:"body_hash"`
+	Method    string    `json:"method"`
+	Path      string    `json:"path"`
+	Subject   string    `json:"subject"`
 	State     string    `json:"state"` // pending, approved, rejected, lapsed, used
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -53,13 +56,19 @@ func (s *Service) underCaution(b *binding) bool { return b != nil && s.now().Bef
 
 // CreateApprovalRequest files a refused operation for approval from another binding (A2.2 item 6).
 // The approver's app shows the stored operation and body, never requester-supplied text.
-func (s *Service) CreateApprovalRequest(ctx context.Context, operationID string, requestBody []byte) (gen.ApprovalRequest, error) {
+func (s *Service) CreateApprovalRequest(ctx context.Context, operationID, method, path string, requestBody []byte) (gen.ApprovalRequest, error) {
 	pr, ok := principal(ctx)
 	if !ok {
 		return gen.ApprovalRequest{}, errUnauth()
 	}
-	if s.Approvable != nil && !s.Approvable(operationID) {
-		return gen.ApprovalRequest{}, errInvalid("operation_id", "not_approvable")
+	subject := ""
+	if s.Approvable != nil {
+		var ok bool
+		// SR-H1: the filed method and concrete path must be those of the named operation; the
+		// subject the approver sees is built from them.
+		if subject, ok = s.Approvable(operationID, method, path); !ok {
+			return gen.ApprovalRequest{}, errInvalid("operation_id", "not_approvable")
+		}
 	}
 	var obj map[string]json.RawMessage
 	if json.Unmarshal(requestBody, &obj) != nil || obj == nil {
@@ -76,7 +85,7 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, operationID string,
 		}
 		now := s.now()
 		r := approvalReq{ID: string(s.NewID()), TenantID: pr.TenantID, AccountID: sess.AccountID, Member: pr.Subject, Session: sess.ID,
-			Operation: operationID, BodyHash: BodyHashField(requestBody), State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
+			Operation: operationID, BodyHash: BodyHashField(requestBody), Method: method, Path: path, Subject: subject, State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
 		if err := put(tx, kApprReq, repository.Global, r.ID, r, keys{k1: r.TenantID, k2: r.AccountID}); err != nil {
 			return err
 		}
@@ -105,7 +114,7 @@ func claimBodyHash(field string) string {
 }
 
 func approvalDTO(r *approvalReq, now time.Time, showToken bool) gen.ApprovalRequest {
-	g := gen.ApprovalRequest{Id: r.ID, OperationId: r.Operation, BodyHash: r.BodyHash, CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, State: gen.ApprovalRequestState(r.effective(now))}
+	g := gen.ApprovalRequest{Id: r.ID, OperationId: r.Operation, BodyHash: r.BodyHash, Subject: strp(r.Subject), RequestMethod: strp(r.Method), RequestPath: strp(r.Path), CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, State: gen.ApprovalRequestState(r.effective(now))}
 	if showToken && r.Token != "" {
 		t := r.Token
 		g.ApprovalToken = &t
@@ -219,7 +228,7 @@ func (s *Service) DecideApprovalRequest(ctx context.Context, id string, in gen.D
 		} else {
 			r.State, r.Approver = "approved", pr.Subject
 			claims := auth.Claims{Subject: r.Member, Type: auth.TypeApproval, TenantID: r.TenantID, SessionID: r.Session, Operation: r.Operation,
-				BodyHash: claimBodyHash(r.BodyHash), IssuedAt: now.Unix(), ExpiresAt: now.Add(s.Cfg.ApprovalTokTTL).Unix(), JTI: string(s.NewID())}
+				BodyHash: claimBodyHash(r.BodyHash), TargetHash: auth.TargetHash(r.Method, r.Path, claimBodyHash(r.BodyHash)), Label: r.Subject, IssuedAt: now.Unix(), ExpiresAt: now.Add(s.Cfg.ApprovalTokTTL).Unix(), JTI: string(s.NewID())}
 			tok, err := s.Tokens.Access(claims)
 			if err != nil {
 				return err
@@ -374,4 +383,11 @@ func auditDTO(d auditDoc) gen.TenantAuditEntry {
 	g.ReadSummary, g.TargetId, g.SupportSessionId = opt(d.Summary), opt(d.Target), opt(d.Session)
 	g.Reason, g.TicketReference = opt(d.Reason), opt(d.Ticket)
 	return g
+}
+
+func strp(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }

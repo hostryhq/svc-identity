@@ -292,8 +292,15 @@ func TestVendorDeviceRevokeQuotaAndSecondApprover(t *testing.T) {
 	if c := approve(second, ap.Id, second.secret); c != 200 {
 		t.Fatalf("eligible approver: %d", c)
 	}
-	if c, r, _ := revoke(devs[2], &ap.Id); c != 200 || !r.Changed {
-		t.Fatalf("revoke with approval: %d %+v", c, r)
+	// P2C-1 (ADR-0014 A2.5 item 3): the revoke executes at the second approval, in the approving call.
+	var vd gen.VendorDevice
+	e.mustJSON(200, "GET", base+"/"+devs[2].ID, admin.tok, nil, &vd, admin.h(e)...)
+	if vd.State != gen.DeviceStateRevoked {
+		t.Fatalf("device after the second approval: %s", vd.State)
+	}
+	// Repeating the revoke with approval_id afterwards is a no-op retry: 200, nothing changes.
+	if c, r, _ := revoke(devs[2], &ap.Id); c != 200 || r.Changed || r.Outcome != gen.VendorRevokeResultOutcomeAlreadyRevoked {
+		t.Fatalf("retry with approval: %d %+v", c, r)
 	}
 	if c, _, _ := revoke(double.NewDevice(newID()), &ap.Id); c != 404 {
 		t.Fatalf("unknown device: %d", c)

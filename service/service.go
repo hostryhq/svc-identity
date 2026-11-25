@@ -223,7 +223,7 @@ type Service struct {
 	SMSAsync bool
 	// Approvable reports whether an operation id may be filed for caution approval (A2.2). The api
 	// layer supplies it from the generated route table.
-	Approvable func(operationID string) bool
+	Approvable func(operationID, method, path string) (subject string, ok bool)
 }
 
 // AssertionVerifier verifies a device assertion JWS against the device's public key and returns
@@ -272,6 +272,15 @@ func put(tx repository.Tx, kind, scope, id string, v any, k keys) error {
 		return err
 	}
 	return tx.Put(repository.Record{Kind: kind, Scope: scope, ID: id, K1: k.k1, K2: k.k2, Unique: k.unique, Doc: b})
+}
+
+// create is put that refuses an existing id (repository.ErrConflict) instead of overwriting it.
+func create(tx repository.Tx, kind, scope, id string, v any, k keys) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return tx.Create(repository.Record{Kind: kind, Scope: scope, ID: id, K1: k.k1, K2: k.k2, Unique: k.unique, Doc: b})
 }
 
 func decode[T any](rs []repository.Record) ([]T, error) {

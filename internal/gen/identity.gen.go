@@ -160,6 +160,30 @@ func (e CodeHalfPosition) Valid() bool {
 	}
 }
 
+// Defines values for CreateApprovalRequestRequestMethod.
+const (
+	DELETE CreateApprovalRequestRequestMethod = "DELETE"
+	PATCH  CreateApprovalRequestRequestMethod = "PATCH"
+	POST   CreateApprovalRequestRequestMethod = "POST"
+	PUT    CreateApprovalRequestRequestMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the CreateApprovalRequestRequestMethod enum.
+func (e CreateApprovalRequestRequestMethod) Valid() bool {
+	switch e {
+	case DELETE:
+		return true
+	case PATCH:
+		return true
+	case POST:
+		return true
+	case PUT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateSessionGrantType.
 const (
 	CreateSessionGrantTypeOtp        CreateSessionGrantType = "otp"
@@ -1089,7 +1113,7 @@ type ApprovalKind string
 
 // ApprovalRequest A pending, approved, rejected or lapsed caution approval. The approval token is returned once, to the requester, when approved.
 type ApprovalRequest struct {
-	// ApprovalToken ES256 approval token, 5 minutes, single use; present once on approval. Claims: typ approval, sid, op (operationId) and bh (hash of the request body). Sent on the repeated request in the Hostry-Approval header.
+	// ApprovalToken ES256 approval token, 5 minutes, single use; present once on approval. Claims: typ approval, sid, op (operationId), bh (hash of the request body), th (lower-case hex SHA-256 over METHOD, newline, concrete path, newline, bh in go-auth encoding) and lbl (the subject). Sent on the repeated request in the Hostry-Approval header.
 	//
 	// Example: tok_example_approval
 	ApprovalToken *string `json:"approval_token,omitempty"`
@@ -1119,10 +1143,25 @@ type ApprovalRequest struct {
 	// Example: createMember
 	OperationId string `json:"operation_id"`
 
+	// RequestMethod HTTP method the approval is bound to.
+	//
+	// Example: POST
+	RequestMethod *string `json:"request_method,omitempty"`
+
+	// RequestPath Concrete path the approval is bound to.
+	//
+	// Example: /v1/members
+	RequestPath *string `json:"request_path,omitempty"`
+
 	// State Request state.
 	//
 	// Example: pending
 	State ApprovalRequestState `json:"state"`
+
+	// Subject Human-readable summary of what the approver is approving, built by identity from the stored operation, method, path and body (for example "Add member Sita"), never from requester text.
+	//
+	// Example: Create member
+	Subject *string `json:"subject,omitempty"`
 }
 
 // ApprovalRequestState Request state.
@@ -1281,7 +1320,22 @@ type CreateApprovalRequest struct {
 
 	// RequestBody The exact body that will be repeated with the approval token.
 	RequestBody map[string]any `json:"request_body"`
+
+	// RequestMethod HTTP method of the refused request. The approval token is bound to it (claim th).
+	//
+	// Example: POST
+	RequestMethod CreateApprovalRequestRequestMethod `json:"request_method"`
+
+	// RequestPath Concrete path of the refused request, with every path parameter filled in (for example /v1/members/0198a000-0000-7000-8000-000000000001/owner-role), as it will be sent. The approval token is bound to method, this path and the body (claim th), so an approval for one resource cannot release the same operation on another.
+	//
+	// Example: /v1/members
+	RequestPath string `json:"request_path"`
 }
+
+// CreateApprovalRequestRequestMethod HTTP method of the refused request. The approval token is bound to it (claim th).
+//
+// Example: POST
+type CreateApprovalRequestRequestMethod string
 
 // CreateMember Add a member. With a mobile number the person is invited; the response is identical whether or not the number has an account.
 type CreateMember struct {
@@ -2349,6 +2403,11 @@ type ProofVerdict struct {
 	//
 	// Example: verified
 	Label ProofVerdictLabel `json:"label"`
+
+	// Locked True when the member and device pair is locked by the failed-proof cap (ADR-0005 A2.1 item 5: 10 failed proofs in 24 hours, or 5 in 15 minutes). A locked pair is answered without a check, so the answer is never an oracle for the proof; label is unverified. The count is kept by identity and shared by the pin grant and this operation; a successful sign-in never clears the 24-hour count. Absent means false.
+	//
+	// Example: false
+	Locked *bool `json:"locked,omitempty"`
 
 	// Valid Whether the proof verifies for that pin_v.
 	//
@@ -3551,19 +3610,19 @@ type WipeNotReady = Problem
 
 // RecordDeviceDrainedParams defines parameters for RecordDeviceDrained.
 type RecordDeviceDrainedParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CheckPackHistoryParams defines parameters for CheckPackHistory.
 type CheckPackHistoryParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // VerifyProofParams defines parameters for VerifyProof.
 type VerifyProofParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3599,7 +3658,7 @@ type CreateVendorApprovalParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3614,7 +3673,7 @@ type CancelVendorApprovalParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3623,7 +3682,7 @@ type ClaimCodeHalfParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3632,7 +3691,7 @@ type ApproveVendorApprovalParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3689,7 +3748,7 @@ type RevokeOrganisationDeviceParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3704,7 +3763,7 @@ type CreateOwnerInvitationParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3713,7 +3772,7 @@ type CancelOwnerInvitationParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3722,7 +3781,7 @@ type RenewOwnerInvitationParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3731,7 +3790,7 @@ type LookupOrganisationsByOwnerMobileParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3749,7 +3808,7 @@ type RenewVendorSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3758,7 +3817,7 @@ type CreateVendorSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3767,7 +3826,7 @@ type EndVendorSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3776,7 +3835,7 @@ type CompleteVendorSetupParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3785,7 +3844,7 @@ type BeginVendorSetupParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3794,7 +3853,7 @@ type StartSupportSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3809,7 +3868,7 @@ type EndSupportSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3818,7 +3877,7 @@ type RenewSupportTokenParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3839,7 +3898,7 @@ type CreateVendorUserParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3848,7 +3907,7 @@ type UpdateVendorUserParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3857,13 +3916,13 @@ type ResetVendorUserTotpParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateActivationCodeParams defines parameters for CreateActivationCode.
 type CreateActivationCodeParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3881,13 +3940,13 @@ type ListApprovalRequestsParams struct {
 
 // CreateApprovalRequestParams defines parameters for CreateApprovalRequest.
 type CreateApprovalRequestParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // DecideApprovalRequestParams defines parameters for DecideApprovalRequest.
 type DecideApprovalRequestParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3926,19 +3985,19 @@ type ListBindingsParams struct {
 
 // RejectBindingParams defines parameters for RejectBinding.
 type RejectBindingParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ActivateDeviceParams defines parameters for ActivateDevice.
 type ActivateDeviceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateDeviceNonceParams defines parameters for CreateDeviceNonce.
 type CreateDeviceNonceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3959,7 +4018,7 @@ type ListDevicesParams struct {
 
 // RegisterDeviceParams defines parameters for RegisterDevice.
 type RegisterDeviceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3968,7 +4027,7 @@ type RegisterDeviceParams struct {
 
 // RevokeDeviceParams defines parameters for RevokeDevice.
 type RevokeDeviceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3989,7 +4048,7 @@ type ListMembersParams struct {
 
 // CreateMemberParams defines parameters for CreateMember.
 type CreateMemberParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3998,7 +4057,7 @@ type CreateMemberParams struct {
 
 // UpdateMemberParams defines parameters for UpdateMember.
 type UpdateMemberParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4007,7 +4066,7 @@ type UpdateMemberParams struct {
 
 // RemoveOwnerRoleParams defines parameters for RemoveOwnerRole.
 type RemoveOwnerRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4016,7 +4075,7 @@ type RemoveOwnerRoleParams struct {
 
 // AssignOwnerRoleParams defines parameters for AssignOwnerRole.
 type AssignOwnerRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4025,13 +4084,13 @@ type AssignOwnerRoleParams struct {
 
 // SetPinParams defines parameters for SetPin.
 type SetPinParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ClearPinLockoutParams defines parameters for ClearPinLockout.
 type ClearPinLockoutParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4040,7 +4099,7 @@ type ClearPinLockoutParams struct {
 
 // AuthorisePinResetParams defines parameters for AuthorisePinReset.
 type AuthorisePinResetParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4049,7 +4108,7 @@ type AuthorisePinResetParams struct {
 
 // CreateRoleAssignmentParams defines parameters for CreateRoleAssignment.
 type CreateRoleAssignmentParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4058,7 +4117,7 @@ type CreateRoleAssignmentParams struct {
 
 // DeleteRoleAssignmentParams defines parameters for DeleteRoleAssignment.
 type DeleteRoleAssignmentParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4067,13 +4126,13 @@ type DeleteRoleAssignmentParams struct {
 
 // CreateOtpChallengeParams defines parameters for CreateOtpChallenge.
 type CreateOtpChallengeParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CancelOwnerRecoveryParams defines parameters for CancelOwnerRecovery.
 type CancelOwnerRecoveryParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -4088,7 +4147,7 @@ type ListRolesParams struct {
 
 // CreateRoleParams defines parameters for CreateRole.
 type CreateRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4097,7 +4156,7 @@ type CreateRoleParams struct {
 
 // DeleteRoleParams defines parameters for DeleteRole.
 type DeleteRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4106,7 +4165,7 @@ type DeleteRoleParams struct {
 
 // UpdateRoleParams defines parameters for UpdateRole.
 type UpdateRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4115,37 +4174,37 @@ type UpdateRoleParams struct {
 
 // CreateSessionParams defines parameters for CreateSession.
 type CreateSessionParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // EndSessionParams defines parameters for EndSession.
 type EndSessionParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateDeviceTokenParams defines parameters for CreateDeviceToken.
 type CreateDeviceTokenParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateDrainTokenParams defines parameters for CreateDrainToken.
 type CreateDrainTokenParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // RefreshSessionParams defines parameters for RefreshSession.
 type RefreshSessionParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // SwitchMemberParams defines parameters for SwitchMember.
 type SwitchMemberParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 

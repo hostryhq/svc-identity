@@ -330,7 +330,19 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 	}
 	var out gen.ApprovalDecision
 	var refuse error
-	err = s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+	// A device revoke executes in the approving call (P2C-1), so that transaction runs in the
+	// organisation's scope; every other kind stays service-global.
+	scope := repository.Global
+	if err := s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		a, err := get[vendorApproval](tx, kVendorAppr, repository.Global, id)
+		if err == nil && a != nil && a.Kind == "device_revoke_over_quota" {
+			scope = a.Org
+		}
+		return err
+	}); err != nil {
+		return out, err
+	}
+	err = s.Store.Tx(ctx, scope, func(tx repository.Tx) error {
 		a, err := get[vendorApproval](tx, kVendorAppr, repository.Global, id)
 		if err != nil || a == nil {
 			return notFoundOr(err)
@@ -386,6 +398,10 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 		case "owner_recovery":
 			a.CompletesAt = now.Add(s.Cfg.RecoveryDelay)
 			s.Notify.Notify(ctx, Notice{Kind: "recovery_started", TenantID: a.Org, Detail: a.ID})
+		case "device_revoke_over_quota":
+			if err := s.executeApprovedRevoke(ctx, tx, a, u.ID); err != nil {
+				return err
+			}
 		}
 		if err := put(tx, kVendorAppr, repository.Global, a.ID, a, keys{k1: a.Org, k2: a.Requester}); err != nil {
 			return err
@@ -752,4 +768,40 @@ func (s *Service) CompleteDueRecoveries(ctx context.Context) (int, error) {
 		}
 	}
 	return len(due), nil
+}
+
+// executeApprovedRevoke revokes the device an over-quota approval names, in the approving call
+// (ADR-0014 A2.5 item 3). The revoke counts against the requester's quota. A device that is already
+// revoked marks the approval completed and uses no quota (BR-44). The approval id on a later
+// revoke request is then a no-op retry.
+func (s *Service) executeApprovedRevoke(ctx context.Context, tx repository.Tx, a *vendorApproval, approver string) error {
+	d, err := get[device](tx, kDevice, a.Org, a.Subject)
+	if err != nil {
+		return err
+	}
+	a.Used, a.State = true, "completed"
+	if d == nil || d.State != "active" {
+		return nil
+	}
+	now := s.now()
+	qo, err := s.limitGet(tx, "vrevoke:org:"+a.Requester+":"+a.Org)
+	if err != nil {
+		return err
+	}
+	qu, err := s.limitGet(tx, "vrevoke:user:"+a.Requester)
+	if err != nil {
+		return err
+	}
+	qo.Times, qu.Times = append(prune(qo.Times, now, 24*time.Hour), now), append(prune(qu.Times, now, 24*time.Hour), now)
+	if err := s.limitPut(tx, "vrevoke:org:"+a.Requester+":"+a.Org, qo); err != nil {
+		return err
+	}
+	if err := s.limitPut(tx, "vrevoke:user:"+a.Requester, qu); err != nil {
+		return err
+	}
+	if err := s.revokeDeviceTx(tx, d, "other", "vendor:"+a.Requester); err != nil {
+		return err
+	}
+	return s.tenantVendorAudit(tx, ctx, a.Org, auditDoc{Action: "vendor.device.revoked", Outcome: "succeeded", Target: d.ID, Reason: a.Reason, Ticket: a.Ticket,
+		Summary: "second approval by " + approver})
 }

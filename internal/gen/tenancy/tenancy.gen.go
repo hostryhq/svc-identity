@@ -260,7 +260,7 @@ type ValidationFailed = Problem
 
 // IssueDocumentSeriesParams defines parameters for IssueDocumentSeries.
 type IssueDocumentSeriesParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 

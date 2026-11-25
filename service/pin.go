@@ -282,6 +282,7 @@ type failDoc struct {
 	Times  []time.Time `json:"t"`
 	Until  time.Time   `json:"until,omitempty"`
 	Locked bool        `json:"locked,omitempty"`
+	Seen   []string    `json:"seen,omitempty"` // gateway proof checks already counted (session ids, action hashes)
 }
 
 // CreateDeviceGrantToken gives an unattended device (kds, hub) its device token by key assertion.
@@ -418,31 +419,7 @@ func (s *Service) CreatePinToken(ctx context.Context, in gen.PinGrant) (gen.Devi
 			return nil
 		}
 		fail := func(why string) error {
-			pair.Times = append(pair.Times, now)
-			if len(pair.Times) >= 10 {
-				pair.Locked = true
-			}
-			if err := put(tx, kProofFail, d.TenantID, fkey, pair, keys{k1: in.MemberId}); err != nil {
-				return err
-			}
-			dev, err := get[failDoc](tx, kProofFail, d.TenantID, "device:"+d.ID)
-			if err != nil {
-				return err
-			}
-			if dev == nil {
-				dev = &failDoc{}
-			}
-			dev.Times = append(prune(dev.Times, now, 24*time.Hour), now)
-			if len(dev.Times) == 20 {
-				s.Notify.Notify(ctx, Notice{Kind: "device_tampering_suspected", TenantID: d.TenantID, DeviceID: d.ID})
-				if err := s.audit(tx, d.TenantID, auditDoc{Action: "device.tampering_suspected", ActorKind: "system", ActorLbl: "identity", Outcome: "refused", Target: d.ID}); err != nil {
-					return err
-				}
-			}
-			if err := put(tx, kProofFail, d.TenantID, "device:"+d.ID, dev, keys{}); err != nil {
-				return err
-			}
-			if err := s.audit(tx, d.TenantID, auditDoc{Action: "session.proof_failed", ActorKind: "device", ActorLbl: d.ID, Device: d.ID, Outcome: "refused", Target: in.MemberId, Reason: why}); err != nil {
+			if err := s.countProofFailure(ctx, tx, d.TenantID, d.ID, in.MemberId, pair, now, why); err != nil {
 				return err
 			}
 			refuse = errProof()
@@ -521,7 +498,9 @@ func (s *Service) CreatePinToken(ctx context.Context, in gen.PinGrant) (gen.Devi
 		if err != nil {
 			return err
 		}
-		pair.Times = nil // a success clears the short-window counter
+		// SR-H5: a success clears only the 15-minute window. The 24-hour failure count stays until an
+		// administrator clears it or the PIN is reset, so honest logins cannot launder a guessing run.
+		pair.Times, pair.Until = outsideWindow(pair.Times, now, 15*time.Minute), time.Time{}
 		if err := put(tx, kProofFail, d.TenantID, fkey, pair, keys{k1: in.MemberId}); err != nil {
 			return err
 		}
@@ -533,6 +512,55 @@ func (s *Service) CreatePinToken(ctx context.Context, in gen.PinGrant) (gen.Devi
 		return gen.DeviceToken{}, err
 	}
 	return out, refuse
+}
+
+// outsideWindow keeps the failures older than window (the 24-hour tail of a short-window clear).
+func outsideWindow(times []time.Time, now time.Time, window time.Duration) []time.Time {
+	var out []time.Time
+	for _, t := range times {
+		if now.Sub(t) >= window {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// pairRefused reports whether the member-and-device pair is refused: locked after 10 failures in 24
+// hours, inside a 15-minute refusal, or at 5 failures in 15 minutes (A2.1 item 5).
+func pairRefused(pair *failDoc, now time.Time) bool {
+	n, _ := within(pair.Times, now, 15*time.Minute)
+	return pair.Locked || now.Before(pair.Until) || n >= 5
+}
+
+// countProofFailure records one failed proof for the pair and the device and audits it. The pin
+// grant and VerifyProof share it: one counter, one cap (SR-H5).
+func (s *Service) countProofFailure(ctx context.Context, tx repository.Tx, tenant, deviceID, memberID string, pair *failDoc, now time.Time, why string) error {
+	fkey := deviceID + ":" + memberID
+	pair.Times = append(pair.Times, now)
+	if len(pair.Times) >= 10 {
+		pair.Locked = true
+	}
+	if err := put(tx, kProofFail, tenant, fkey, pair, keys{k1: memberID}); err != nil {
+		return err
+	}
+	dev, err := get[failDoc](tx, kProofFail, tenant, "device:"+deviceID)
+	if err != nil {
+		return err
+	}
+	if dev == nil {
+		dev = &failDoc{}
+	}
+	dev.Times = append(prune(dev.Times, now, 24*time.Hour), now)
+	if len(dev.Times) == 20 {
+		s.Notify.Notify(ctx, Notice{Kind: "device_tampering_suspected", TenantID: tenant, DeviceID: deviceID})
+		if err := s.audit(tx, tenant, auditDoc{Action: "device.tampering_suspected", ActorKind: "system", ActorLbl: "identity", Outcome: "refused", Target: deviceID}); err != nil {
+			return err
+		}
+	}
+	if err := put(tx, kProofFail, tenant, "device:"+deviceID, dev, keys{}); err != nil {
+		return err
+	}
+	return s.audit(tx, tenant, auditDoc{Action: "session.proof_failed", ActorKind: "device", ActorLbl: deviceID, Device: deviceID, Outcome: "refused", Target: memberID, Reason: why})
 }
 
 func contains(l []string, v string) bool {
@@ -575,17 +603,58 @@ func (s *Service) VerifyProof(ctx context.Context, in gen.ProofVerification) (ge
 		if err != nil || m == nil {
 			return err
 		}
-		h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(in.PackV))
-		if err != nil || h == nil || !contains(h.Members, m.ID) {
+		// The failed-proof cap (A2.1 item 5) lives here: one counter per member and device, shared with
+		// the pin grant. A locked pair is answered without a check, so this is never a free oracle for
+		// the truncated verifier. A failure counts once per session id or action hash.
+		now := s.now()
+		fkey := in.DeviceId + ":" + in.MemberId
+		pair, err := get[failDoc](tx, kProofFail, pr.TenantID, fkey)
+		if err != nil {
 			return err
+		}
+		if pair == nil {
+			pair = &failDoc{}
+		}
+		pair.Times = prune(pair.Times, now, 24*time.Hour)
+		if pairRefused(pair, now) {
+			locked := true
+			verdict.Locked = &locked
+			return nil
+		}
+		fail := func(why string) error {
+			dedupe := ""
+			if in.SessionId != nil {
+				dedupe = "s:" + *in.SessionId
+			} else if in.ActionHash != nil {
+				dedupe = "a:" + *in.ActionHash
+			}
+			for _, seen := range pair.Seen {
+				if dedupe != "" && seen == dedupe {
+					return nil
+				}
+			}
+			if dedupe != "" {
+				pair.Seen = append(pair.Seen, dedupe)
+				if len(pair.Seen) > 64 {
+					pair.Seen = pair.Seen[len(pair.Seen)-64:]
+				}
+			}
+			return s.countProofFailure(ctx, tx, pr.TenantID, in.DeviceId, in.MemberId, pair, now, why)
+		}
+		h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(in.PackV))
+		if err != nil {
+			return err
+		}
+		if h == nil || !contains(h.Members, m.ID) {
+			return fail("pack")
 		}
 		if s.exampleLiteral(in.Proof, "proof.example") {
 			verdict = gen.ProofVerdict{Label: gen.Verified, Valid: true}
 			return nil
 		}
-		key, ok := s.proofKeyFor(m, in.PinV, s.now(), false)
+		key, ok := s.proofKeyFor(m, in.PinV, now, false)
 		if !ok {
-			return nil
+			return fail("pin_v")
 		}
 		var msg string
 		if in.Kind == gen.ProofVerificationKindSession {
@@ -595,8 +664,9 @@ func (s *Service) VerifyProof(ctx context.Context, in gen.ProofVerification) (ge
 		}
 		if crypto.Equal(Proof(key, msg), in.Proof) {
 			verdict = gen.ProofVerdict{Label: gen.Verified, Valid: true}
+			return nil
 		}
-		return nil
+		return fail("proof")
 	})
 	return verdict, err
 }

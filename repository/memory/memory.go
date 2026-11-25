@@ -186,6 +186,16 @@ func (t *tx) Put(r repository.Record) error {
 	return nil
 }
 
+func (t *tx) Create(r repository.Record) error {
+	if repository.IsGlobal(r.Kind) {
+		r.Scope = repository.Global
+	}
+	if _, ok := t.data[key(r.Kind, r.Scope, r.ID)]; ok {
+		return repository.ErrConflict
+	}
+	return t.Put(r)
+}
+
 func (t *tx) Delete(kind, scope, id string) error {
 	if !t.visible(kind, scope) {
 		return nil
