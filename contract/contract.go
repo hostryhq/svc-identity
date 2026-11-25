@@ -79,6 +79,10 @@ const (
 // ExampleKey is the public key of the examples.
 var ExampleKey = crypto.JWK{Kty: "EC", Crv: "P-256", X: "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU", Y: "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}
 
+// DeviceKey is the key of the example device DeviceID: the example drain statement of recordDeviceDrained is signed
+// under it (sync/conformance/v1.json, "recordDeviceDrained example"), so the suite verifies it for real.
+var DeviceKey = crypto.JWK{Kty: "EC", Crv: "P-256", X: "RkIsrT_6d4DtRizD7_vYjm73wpaKUWtN-gKr82eoCVI", Y: "swGR9KDggu8eQifrmSzas-yv6bVfIjwssN5WZJ7aT5M"}
+
 // World is one target of the suite: a double, or the real assembly over PostgreSQL wrapped in one.
 type World struct {
 	D        *double.Double

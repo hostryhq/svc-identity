@@ -93,6 +93,15 @@ deterministic ids and a recording SMS sender.
   outlet unknown to the caller's tenant is refused (422) for billing kinds; kinds with no billing (kds, hub,
   personal) are not checked, because tenancy has no internal outlet-existence route. The call is made inside the
   registration transaction, bounded by a 5 s timeout and one retry.
+- Hub packs and the `store` claim (ADR-0002 A3.4, A3.5). A device of kind `hub` is activated like any other and its
+  pack carries `HubPackClaims` (outlet's member ids with status and permissions, revoked device ids, identity keys,
+  op-signing key; no names, PIN verifiers, salts, series, manual books or entitlements). Every pack's `device.credential`
+  is the LAN credential: a compact ES256 JWS, header typ `hostry-cred+jws`, signed with the current identity (tenant
+  realm) key, payload the sorted-key JSON of the credential plus `not_after` = `offline_valid_until` (unix seconds).
+  The build declares `store` (`protected`, or `unprotected`; absent means `unprotected`) on `activateDevice` and
+  `registerDevice`; it is recorded on the device row, signed into the credential and fixed for the life of the id.
+  `unprotected` is refused with 422 `store.unprotected_refused` unless `HOSTRY_ENV` is dev, test or ci (checked before
+  the code is spent). The browser build always declares `unprotected`, so live identity refuses it a pack.
 - Vendor approval grants (`org_suspend`, `org_reinstate`, `org_close`, `tax_rule_set_publish`) follow ADR-0014 A2.6
   and verify under go-auth's `GrantVerifier` (round-trip test in `api/vendor_grant_test.go`; subject-hash vectors
   in `service/testdata`, a copy of api-specs `common/vendor-grant.vectors.v1.json` at feat/phase2-specs 1462fb8).

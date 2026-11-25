@@ -127,7 +127,7 @@ func (w *World) seedTenant(ctx context.Context, sd *service.Seeder, device bool)
 	if !device {
 		return nil
 	}
-	d := service.SeedDevice{ID: DeviceID, Outlet: Outlet, Kind: "pos", Name: "Counter 1", KeyProt: "hardware", State: "active", Key: ExampleKey, LastSeen: w.D.Clock.Now().Add(5 * time.Minute)}
+	d := service.SeedDevice{ID: DeviceID, Outlet: Outlet, Kind: "pos", Name: "Counter 1", KeyProt: "hardware", State: "active", Key: DeviceKey, LastSeen: w.D.Clock.Now().Add(5 * time.Minute)}
 	if err := sd.Device(ctx, Org, d); err != nil {
 		return err
 	}
