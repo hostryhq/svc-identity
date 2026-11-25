@@ -712,6 +712,14 @@ func (s *Service) RecordDeviceDrained(ctx context.Context, id string, in gen.Rec
 			if err := put(tx, kDevice, pr.TenantID, id, d, keys{k1: d.OutletID}); err != nil {
 				return err
 			}
+			// identity.device.drained (ADR-0014 A2.5 item 2), once, in the transaction of the state change. The
+			// per-series statement of the last number is not part of the gateway's drain report (recordDeviceDrained
+			// carries streams only), so series is empty until the contract carries it: tenancy then has nothing to
+			// fill and never receives a made-up number.
+			if err := s.emit(tx, d.TenantID, d.OutletID, "identity.device.drained", d.ID, pr.Subject,
+				map[string]any{"device_id": d.ID, "drained_at": d.DrainedAt, "series": []map[string]any{}}); err != nil {
+				return err
+			}
 		}
 		out = deviceDTO(d)
 		return nil
