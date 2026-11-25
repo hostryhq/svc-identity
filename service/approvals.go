@@ -85,7 +85,7 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, operationID, method
 		}
 		now := s.now()
 		r := approvalReq{ID: string(s.NewID()), TenantID: pr.TenantID, AccountID: sess.AccountID, Member: pr.Subject, Session: sess.ID,
-			Operation: operationID, BodyHash: BodyHashField(requestBody), Method: method, Path: path, Subject: subject, State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
+			Operation: operationID, BodyHash: BodyHashField(requestBody), Method: method, Path: path, Subject: withSummary(subject, s.approvalSummary(tx, pr.TenantID, operationID, path, requestBody)), State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
 		if err := put(tx, kApprReq, repository.Global, r.ID, r, keys{k1: r.TenantID, k2: r.AccountID}); err != nil {
 			return err
 		}
