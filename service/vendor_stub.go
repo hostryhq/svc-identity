@@ -11,3 +11,9 @@ import (
 func (s *Service) TouchAudited(ctx context.Context, scope string) error {
 	return s.Store.Tx(ctx, scope, func(repository.Tx) error { return nil })
 }
+
+// VendorOrgContext puts the organisation a vendor route names into the context, after checking the
+// permission (go-auth VendorTenant). The api layer uses it to record a replayed request.
+func (s *Service) VendorOrgContext(ctx context.Context, perm, org string) (context.Context, error) {
+	return s.vendorOrg(ctx, perm, org)
+}

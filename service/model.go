@@ -131,6 +131,10 @@ type device struct {
 	DrainedAt  time.Time  `json:"drained_at,omitempty"`
 	DrainedThr []stream   `json:"drained_through,omitempty"`
 	Lineages   []string   `json:"lineages,omitempty"` // refresh lineages seen (clone detection)
+	// Series are the document-series codes tenancy issued to the device (billing kinds); RegUnverified
+	// marks a billing device that registered while its outlet's tax registration was not verified.
+	Series        []devSeries `json:"series,omitempty"`
+	RegUnverified bool        `json:"registration_unverified,omitempty"`
 }
 
 type stream struct {

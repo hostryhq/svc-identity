@@ -84,6 +84,10 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 	if err != nil {
 		return nil, nil, err
 	}
+	ten, err := cfg.tenancy()
+	if err != nil {
+		return nil, nil, err
+	}
 	hc := health.New(2 * time.Second)
 	hc.Add("postgres", st.Ping)
 	sms, err := cfg.smsSender(log)
@@ -93,7 +97,7 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 	res, err := compose.Assemble(compose.Parts{
 		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB()}, Idem: &postgres.Idempotency{DB: st.DB()}, Clock: clock.System,
 		NewID: ids.New, Rand: crypto.System, SMS: sms, Notify: logNotifier{log}, Mail: terminalMail{}, Signer: signer,
-		Services: reg, Log: log, Health: hc, SMSAsync: true,
+		Services: reg, Tenancy: ten, Log: log, Health: hc, SMSAsync: true,
 	})
 	return res, st, err
 }

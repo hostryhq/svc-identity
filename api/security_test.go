@@ -69,7 +69,7 @@ func TestOwnerRecoveryDelayAndCompletion(t *testing.T) {
 	e.signInVendor(second)
 	newMobile := "+919876500777"
 	var ap gen.VendorApproval
-	req := gen.CreateVendorApproval{Kind: gen.ApprovalKindOwnerRecovery, OrganisationId: org.String(), MobileE164: strPtr(ownerMobile), NewMobileE164: strPtr(newMobile), Reason: "Owner lost the SIM card",
+	req := gen.CreateVendorApproval{Kind: gen.ApprovalKindOwnerRecovery, OrganisationId: strPtr(org.String()), MobileE164: strPtr(ownerMobile), NewMobileE164: strPtr(newMobile), Reason: "Owner lost the SIM card",
 		TicketReference: "ONB-9", VerificationMethod: gen.RequesterVerificationCallbackToRegisteredNumber}
 	e.mustJSON(201, "POST", "/internal/v1/vendor/approvals", admin.tok, req, &ap, admin.h(e)...)
 	e.d.Clock.Advance(31 * time.Second)

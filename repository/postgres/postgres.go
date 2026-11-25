@@ -123,11 +123,14 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 // Tx implements repository.Store. A request on a vendor user's authority runs inside go-auth's
 // audited transaction, which writes the vendor_access_log row in the same transaction (fail closed).
 func (s *Store) Tx(ctx context.Context, scope string, fn func(repository.Tx) error) error {
-	if p, ok := auth.PrincipalFrom(ctx); ok && p.IsVendorActor() {
-		if _, has := tenancy.From(ctx); !has {
-			ctx = tenancy.With(ctx, tenancy.Context{TenantID: ids.ID(repository.Platform), ActorID: p.Subject})
+	if p, ok := auth.PrincipalFrom(ctx); ok && p.IsVendorActor() && repository.AuditModeOf(ctx) != repository.AuditNone {
+		// A route that names an organisation writes a tenant access row; an organisation-less route
+		// writes the platform row, which has no tenant.
+		audited := auth.WithAuditedTx
+		if repository.AuditModeOf(ctx) == repository.AuditPlatform {
+			audited = auth.WithPlatformAuditedTx
 		}
-		return auth.WithAuditedTx(ctx, s.db, func(ctx context.Context, sqlTx *sql.Tx) error {
+		return audited(ctx, s.db, func(ctx context.Context, sqlTx *sql.Tx) error {
 			if s.role != "" {
 				if _, err := sqlTx.ExecContext(ctx, "SET LOCAL ROLE "+s.role); err != nil {
 					return err
@@ -324,7 +327,8 @@ func (t *tx) VerifyAuditChain(scope string) (string, error) {
 
 // ---- vendor access log (go-auth hook) ----
 
-// AccessLog implements auth.VendorAuditSink over vendor_access_log.
+// AccessLog implements auth.VendorAuditSink over vendor_access_log (rows with an organisation) and
+// auth.PlatformAuditSink over platform_access_log (organisation-less routes; no tenant column, no RLS).
 type AccessLog struct{ DB *sql.DB }
 
 const insertAccess = `INSERT INTO vendor_access_log (id, at, tenant_id, vendor_user, token_type, support_session, action_key, target_id, ticket, outcome, result_count, request_id)
@@ -343,5 +347,24 @@ func (a *AccessLog) RecordInTx(ctx context.Context, tx tenancy.Execer, e auth.Ve
 // RecordRefused implements auth.VendorAuditSink.
 func (a *AccessLog) RecordRefused(ctx context.Context, e auth.VendorAccessEntry) error {
 	_, err := a.DB.ExecContext(ctx, insertAccess, accessArgs(e)...)
+	return err
+}
+
+const insertPlatformAccess = `INSERT INTO platform_access_log (id, at, vendor_user, token_type, support_session, action_key, target_id, ticket, outcome, result_count, request_id)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
+
+func platformArgs(e auth.VendorAccessEntry) []any {
+	return []any{e.ID.String(), e.Time, e.VendorUser, string(e.TokenType), e.SupportSession, e.ActionKey, e.TargetID, e.Ticket, e.Outcome, e.ResultCount, e.RequestID}
+}
+
+// RecordPlatformInTx implements auth.PlatformAuditSink.
+func (a *AccessLog) RecordPlatformInTx(ctx context.Context, tx tenancy.Execer, e auth.VendorAccessEntry) error {
+	_, err := tx.ExecContext(ctx, insertPlatformAccess, platformArgs(e)...)
+	return err
+}
+
+// RecordPlatformRefused implements auth.PlatformAuditSink.
+func (a *AccessLog) RecordPlatformRefused(ctx context.Context, e auth.VendorAccessEntry) error {
+	_, err := a.DB.ExecContext(ctx, insertPlatformAccess, platformArgs(e)...)
 	return err
 }

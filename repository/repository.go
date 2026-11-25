@@ -57,8 +57,37 @@ type Tx interface {
 	VerifyAuditChain(scope string) (brokenID string, err error)
 }
 
-// Platform is the pseudo-tenant of the vendor realm: the scope of the vendor audit chain and the
-// tenancy context of vendor operations that name no organisation.
+// AuditMode says how a request on a vendor user's authority is recorded in the access log: it follows
+// the route's go-auth policy and is set by the api layer.
+type AuditMode int
+
+// Audit modes. AuditOrganisation is the zero value: the route names an organisation and writes a
+// tenant access row (auth.WithAuditedTx).
+const (
+	AuditOrganisation AuditMode = iota
+	// AuditPlatform is an organisation-less route: the row goes to the platform table, with no tenant
+	// (auth.WithPlatformAuditedTx).
+	AuditPlatform
+	// AuditNone is a directory-class route that is not audited per read (x-vendor-audit: none).
+	AuditNone
+)
+
+type auditModeKey struct{}
+
+// WithAuditMode returns ctx carrying the route's audit mode.
+func WithAuditMode(ctx context.Context, m AuditMode) context.Context {
+	return context.WithValue(ctx, auditModeKey{}, m)
+}
+
+// AuditModeOf returns the audit mode of the request (AuditOrganisation when unset).
+func AuditModeOf(ctx context.Context) AuditMode {
+	m, _ := ctx.Value(auditModeKey{}).(AuditMode)
+	return m
+}
+
+// Platform is the scope of the vendor audit chain (identity's own hash-chained vendor log). It is a
+// label for that chain, not a tenant: vendor access rows of organisation-less routes go to the
+// platform access table.
 const Platform = "00000000-0000-7000-8000-000000000000"
 
 // ChainHash is the audit hash: sha256(prev || scope || id || doc), hex.

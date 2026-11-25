@@ -19,8 +19,12 @@ import (
 // Defines values for ApprovalKind.
 const (
 	ApprovalKindDeviceRevokeOverQuota ApprovalKind = "device_revoke_over_quota"
+	ApprovalKindOrgClose              ApprovalKind = "org_close"
+	ApprovalKindOrgReinstate          ApprovalKind = "org_reinstate"
+	ApprovalKindOrgSuspend            ApprovalKind = "org_suspend"
 	ApprovalKindOwnerRecovery         ApprovalKind = "owner_recovery"
 	ApprovalKindSignInCode            ApprovalKind = "sign_in_code"
+	ApprovalKindTaxRuleSetPublish     ApprovalKind = "tax_rule_set_publish"
 )
 
 // Valid indicates whether the value is a known member of the ApprovalKind enum.
@@ -28,9 +32,17 @@ func (e ApprovalKind) Valid() bool {
 	switch e {
 	case ApprovalKindDeviceRevokeOverQuota:
 		return true
+	case ApprovalKindOrgClose:
+		return true
+	case ApprovalKindOrgReinstate:
+		return true
+	case ApprovalKindOrgSuspend:
+		return true
 	case ApprovalKindOwnerRecovery:
 		return true
 	case ApprovalKindSignInCode:
+		return true
+	case ApprovalKindTaxRuleSetPublish:
 		return true
 	default:
 		return false
@@ -1001,7 +1013,7 @@ type ActivateDevice struct {
 	// Example: 7QK3M9XD
 	ActivationCode string `json:"activation_code"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1042,7 +1054,7 @@ type ActivationCode struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1052,7 +1064,7 @@ type ActivationCode struct {
 	// Example: pos
 	Kind DeviceKind `json:"kind"`
 
-	// OutletId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -1065,9 +1077,12 @@ type ApprovalDecision struct {
 
 	// CodeHalf Half of a vendor-assisted sign-in code, shown once. The requester gets characters 1 to 4, the approver 5 to 8.
 	CodeHalf *CodeHalf `json:"code_half,omitempty"`
+
+	// Grant Signed, single-use grant (vendor realm, type vendor_approval, 5 minutes) for the kinds executed by another service (ADR-0014 A1.3). Its claims are the approval id, kind, organisation or none, requester, approver and a subject hash over the fields named per kind: organisation id and target status for org_suspend, org_reinstate and org_close; rule-set id, content hash and effective date for tax_rule_set_publish. The admin service passes it to the executing service and never to the browser. If the executor refuses, the approval stays approved and a fresh grant can be issued until it lapses.
+	Grant *VendorApprovalGrant `json:"grant,omitempty"`
 }
 
-// ApprovalKind What the two-person approval authorises.
+// ApprovalKind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation.
 //
 // Example: sign_in_code
 type ApprovalKind string
@@ -1079,9 +1094,9 @@ type ApprovalRequest struct {
 	// Example: tok_example_approval
 	ApprovalToken *string `json:"approval_token,omitempty"`
 
-	// BodyHash Hash the approval token is bound to.
+	// BodyHash Hash the approval token is bound to (claim bh): "sha256:" followed by the 64 lower-case hex digits of the SHA-256 over the exact bytes of the request body as sent, with no parsing, re-serialisation or whitespace change. For this filing request those are the bytes of the request_body member exactly as received; the repeated operation must send a body that is byte-identical to them, and the verifier hashes the bytes it received. An empty body hashes the empty string. go-auth provides the helper that computes and checks it.
 	//
-	// Example: sha256:3f2a
+	// Example: sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8
 	BodyHash string `json:"body_hash"`
 
 	// CreatedAt RFC 3339 instant in UTC.
@@ -1094,7 +1109,7 @@ type ApprovalRequest struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1134,7 +1149,7 @@ type ApproveVendorApproval struct {
 
 // AssignmentInput Assign a role at a scope.
 type AssignmentInput struct {
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1142,7 +1157,7 @@ type AssignmentInput struct {
 	// OutletIds Outlets the assignment covers; absent or empty means the whole organisation.
 	OutletIds *[]Id `json:"outlet_ids,omitempty"`
 
-	// RoleId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// RoleId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RoleId Id `json:"role_id"`
@@ -1178,12 +1193,12 @@ type Binding struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	CreatedAt Timestamp `json:"created_at"`
 
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1251,7 +1266,7 @@ type CreateActivationCode struct {
 	// Example: pos
 	Kind DeviceKind `json:"kind"`
 
-	// OutletId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -1275,7 +1290,7 @@ type CreateMember struct {
 	// Example: Asha
 	DisplayName string `json:"display_name"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1291,7 +1306,7 @@ type CreateMember struct {
 
 // CreateOtpChallenge Request to start an owner or manager OTP sign-in. The response never reveals whether the number is known.
 type CreateOtpChallenge struct {
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1320,7 +1335,7 @@ type CreateOwnerInvitation struct {
 
 // CreateSession Exchange a verified OTP, or a vendor-assisted sign-in code, for a session.
 type CreateSession struct {
-	// ChallengeId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// ChallengeId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ChallengeId Id `json:"challenge_id"`
@@ -1335,7 +1350,7 @@ type CreateSession struct {
 	// Example: assertion.example
 	DeviceAssertion string `json:"device_assertion"`
 
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1353,7 +1368,12 @@ type CreateSessionGrantType string
 
 // CreateVendorApproval File a request that needs a second vendor user (ADR-0005 A2.3). With fewer than two eligible users it is refused (second_approver_unavailable); no single-person override exists.
 type CreateVendorApproval struct {
-	// Kind What the two-person approval authorises.
+	// EffectiveDate Business date the rule set takes effect (tax_rule_set_publish only), part of the subject hash.
+	//
+	// Example: 2026-12-01
+	EffectiveDate *openapi_types.Date `json:"effective_date,omitempty"`
+
+	// Kind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation.
 	//
 	// Example: sign_in_code
 	Kind ApprovalKind `json:"kind"`
@@ -1368,17 +1388,27 @@ type CreateVendorApproval struct {
 	// Example: +919876543210
 	NewMobileE164 *MobileE164 `json:"new_mobile_e164,omitempty"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-	OrganisationId Id `json:"organisation_id"`
+	OrganisationId *Id `json:"organisation_id,omitempty"`
 
 	// Reason Free-text reason, 10 to 500 characters. Stays with the owning record; never placed in events.
 	//
 	// Example: Owner phoned to report a lost tablet.
 	Reason Reason `json:"reason"`
 
-	// SubjectId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// RuleSetContentHash Content hash of the signed tax rule set (tax_rule_set_publish only), part of the subject hash the grant binds.
+	//
+	// Example: sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8
+	RuleSetContentHash *string `json:"rule_set_content_hash,omitempty"`
+
+	// RuleSetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	RuleSetId *Id `json:"rule_set_id,omitempty"`
+
+	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SubjectId *Id `json:"subject_id,omitempty"`
@@ -1406,7 +1436,7 @@ type CreateVendorUser struct {
 	// Example: staff@example.invalid
 	Email openapi_types.Email `json:"email"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1437,7 +1467,7 @@ type Device struct {
 	// Example: active
 	BillingCapability BillingCapability `json:"billing_capability"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1462,7 +1492,7 @@ type Device struct {
 	// Example: Counter 1
 	Name string `json:"name"`
 
-	// OutletId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -1494,7 +1524,7 @@ type DeviceGrant struct {
 	// Example: assertion.example
 	Assertion string `json:"assertion"`
 
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1554,7 +1584,7 @@ type DeviceToken struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// SessionId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId *Id `json:"session_id,omitempty"`
@@ -1592,7 +1622,7 @@ type DrainRequest struct {
 	// Example: assertion.example
 	Assertion string `json:"assertion"`
 
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1611,7 +1641,7 @@ type DrainToken struct {
 	ExpiresAt Timestamp `json:"expires_at"`
 }
 
-// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 //
 // Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 type Id = string
@@ -1707,7 +1737,7 @@ type Member struct {
 	// Example: true
 	HasPin bool `json:"has_pin"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1742,12 +1772,12 @@ type MemberPage struct {
 
 // Membership One organisation the signed-in account belongs to.
 type Membership struct {
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -1793,12 +1823,12 @@ type OfflinePack struct {
 type OfflinePackClaims struct {
 	// CatalogueVersion Permission catalogue version.
 	//
-	// Example: 12
+	// Example: 1
 	CatalogueVersion int `json:"catalogue_version"`
 
 	// Device The device's own credential.
 	Device struct {
-		// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+		// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 		//
 		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 		DeviceId Id `json:"device_id"`
@@ -1808,7 +1838,7 @@ type OfflinePackClaims struct {
 		// Example: pos
 		Kind DeviceKind `json:"kind"`
 
-		// OutletId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+		// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 		//
 		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 		OutletId Id `json:"outlet_id"`
@@ -1846,7 +1876,7 @@ type OfflinePackClaims struct {
 	// OpSigningPublicKey One published signing key (RFC 7517).
 	OpSigningPublicKey Jwk `json:"op_signing_public_key"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -1870,7 +1900,7 @@ type OtpChallenge struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1898,7 +1928,7 @@ type OwnerInvitation struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1908,7 +1938,7 @@ type OwnerInvitation struct {
 	// Example: +91*******210
 	MobileMasked MobileMasked `json:"mobile_masked"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -1951,7 +1981,7 @@ type OwnerRecovery struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	CompletesAt *Timestamp `json:"completes_at,omitempty"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1969,20 +1999,20 @@ type OwnerRecoveryState string
 
 // OwnerRoleAssignment Assign the built-in owner role (step-up, owners only).
 type OwnerRoleAssignment struct {
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 }
 
-// OwnerStatus Owner state of an organisation: none (no invitation), or the latest invitation state, or owner (an owner member exists).
+// OwnerStatus Owner state of an organisation: none (no invitation and no owner member), or the state of the latest owner invitation. An organisation whose owner member exists reports accepted (the invitation was consumed); there is no separate owner value.
 //
 // Example: pending
 type OwnerStatus string
 
 // OwnerStatusItem Owner state for one organisation.
 type OwnerStatusItem struct {
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -1992,7 +2022,7 @@ type OwnerStatusItem struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	OwnerAcceptedAt *Timestamp `json:"owner_accepted_at,omitempty"`
 
-	// OwnerStatus Owner state of an organisation: none (no invitation), or the latest invitation state, or owner (an owner member exists).
+	// OwnerStatus Owner state of an organisation: none (no invitation and no owner member), or the state of the latest owner invitation. An organisation whose owner member exists reports accepted (the invitation was consumed); there is no separate owner value.
 	//
 	// Example: pending
 	OwnerStatus OwnerStatus `json:"owner_status"`
@@ -2006,12 +2036,12 @@ type OwnerStatusList struct {
 
 // PackHistoryCheck Was the member and/or series code issued to the device in the given pack?
 type PackHistoryCheck struct {
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
 
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId *Id `json:"member_id,omitempty"`
@@ -2023,7 +2053,7 @@ type PackHistoryCheck struct {
 
 	// SeriesCode Series code to look up.
 	//
-	// Example: A7
+	// Example: A7K
 	SeriesCode *string `json:"series_code,omitempty"`
 }
 
@@ -2052,7 +2082,7 @@ type PackMember struct {
 	// Example: Asha
 	DisplayName string `json:"display_name"`
 
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2095,7 +2125,7 @@ type PackMemberStatus string
 type PackSeries struct {
 	// Code Series code, unique per tax registration.
 	//
-	// Example: A7
+	// Example: A7K
 	Code string `json:"code"`
 
 	// DocType Document type.
@@ -2108,7 +2138,7 @@ type PackSeries struct {
 	// Example: active
 	State PackSeriesState `json:"state"`
 
-	// TaxRegistrationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// TaxRegistrationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	TaxRegistrationId Id `json:"tax_registration_id"`
@@ -2176,7 +2206,7 @@ type PermissionKey = string
 type PermissionList struct {
 	// CatalogueVersion Catalogue version.
 	//
-	// Example: 12
+	// Example: 1
 	CatalogueVersion int `json:"catalogue_version"`
 
 	// Items Catalogue entries.
@@ -2190,7 +2220,7 @@ type PinGrant struct {
 	// Example: assertion.example
 	Assertion string `json:"assertion"`
 
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2200,7 +2230,7 @@ type PinGrant struct {
 	// Example: pin
 	GrantType PinGrantGrantType `json:"grant_type"`
 
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2220,7 +2250,7 @@ type PinGrant struct {
 	// Example: 2
 	PinV int `json:"pin_v"`
 
-	// SessionId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId Id `json:"session_id"`
@@ -2243,7 +2273,7 @@ type PinResetAuthorisation struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2335,10 +2365,10 @@ type ProofVerdictLabel string
 type ProofVerification struct {
 	// ActionHash Action hash, for approval proofs.
 	//
-	// Example: sha256:3f2a
+	// Example: sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8
 	ActionHash *string `json:"action_hash,omitempty"`
 
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2348,7 +2378,7 @@ type ProofVerification struct {
 	// Example: session
 	Kind ProofVerificationKind `json:"kind"`
 
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2373,7 +2403,7 @@ type ProofVerification struct {
 	// Example: proof.example
 	Proof string `json:"proof"`
 
-	// SessionId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId *Id `json:"session_id,omitempty"`
@@ -2438,7 +2468,7 @@ type RecoveryCancellation struct {
 
 // RefreshSession Rotate a refresh token. The proof is signed by the device key, so a copied token is useless elsewhere.
 type RefreshSession struct {
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2456,7 +2486,7 @@ type RefreshSession struct {
 
 // RegisterDevice Register a device by a signed-in member holding device.register. Kind and outlet are the registering member's choice and are never taken from a later client claim.
 type RegisterDevice struct {
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2486,7 +2516,7 @@ type RegisterDevice struct {
 	// Example: sig.example
 	NonceSignature string `json:"nonce_signature"`
 
-	// OutletId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -2510,12 +2540,12 @@ type RequesterVerification string
 
 // Revocation A device or session revocation (tenant-id-only feed, no personal data).
 type Revocation struct {
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2525,7 +2555,7 @@ type Revocation struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	RevokedAt Timestamp `json:"revoked_at"`
 
-	// SubjectId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SubjectId Id `json:"subject_id"`
@@ -2575,7 +2605,7 @@ type Role struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	CreatedAt Timestamp `json:"created_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2596,7 +2626,7 @@ type Role struct {
 
 // RoleAssignment A member-role-scope assignment.
 type RoleAssignment struct {
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2604,7 +2634,7 @@ type RoleAssignment struct {
 	// OutletIds Outlets the assignment covers; absent means the whole organisation.
 	OutletIds *[]Id `json:"outlet_ids,omitempty"`
 
-	// RoleId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// RoleId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RoleId Id `json:"role_id"`
@@ -2612,7 +2642,7 @@ type RoleAssignment struct {
 
 // RoleInput Create or replace a role. The actor must hold every permission before and after the edit (G1).
 type RoleInput struct {
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id *Id `json:"id,omitempty"`
@@ -2657,7 +2687,7 @@ type Session struct {
 	// Example: false
 	InvitationAccepted bool `json:"invitation_accepted"`
 
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2665,7 +2695,7 @@ type Session struct {
 	// Memberships All organisations of the account; the token is for member_id only.
 	Memberships []Membership `json:"memberships"`
 
-	// SessionId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId Id `json:"session_id"`
@@ -2676,7 +2706,7 @@ type Session struct {
 
 // SetPin Set or change a PIN. The body is excluded from every log and trace.
 type SetPin struct {
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2686,7 +2716,7 @@ type SetPin struct {
 	// Example: 482915
 	Pin string `json:"pin"`
 
-	// PinResetAuthorisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// PinResetAuthorisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	PinResetAuthorisationId *Id `json:"pin_reset_authorisation_id,omitempty"`
@@ -2704,7 +2734,7 @@ type StartSupportSession struct {
 	// Example: view
 	Mode *StartSupportSessionMode `json:"mode,omitempty"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2750,7 +2780,7 @@ type SupportSession struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	EndsAt Timestamp `json:"ends_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2760,7 +2790,7 @@ type SupportSession struct {
 	// Example: view
 	Mode SupportSessionMode `json:"mode"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2780,7 +2810,7 @@ type SupportSession struct {
 	// Example: SUP-2041
 	TicketReference TicketReference `json:"ticket_reference"`
 
-	// VendorUserId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// VendorUserId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	VendorUserId Id `json:"vendor_user_id"`
@@ -2820,7 +2850,7 @@ type SupportToken struct {
 
 // SwitchMember Request a token for another organisation of the same account (a new token, membership re-read).
 type SwitchMember struct {
-	// MemberId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2843,7 +2873,7 @@ type TenantAuditEntry struct {
 	// Example: Hostry support
 	ActorLabel string `json:"actor_label"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2873,12 +2903,12 @@ type TenantAuditEntry struct {
 	// Example: true
 	ShowToOwner bool `json:"show_to_owner"`
 
-	// SupportSessionId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SupportSessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SupportSessionId *Id `json:"support_session_id,omitempty"`
 
-	// TargetId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// TargetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	TargetId *Id `json:"target_id,omitempty"`
@@ -2989,7 +3019,7 @@ type UpdateVendorUserStatus string
 
 // VendorApproval A two-person approval record. Phone numbers appear only masked.
 type VendorApproval struct {
-	// ApprovedBy Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// ApprovedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ApprovedBy *Id `json:"approved_by,omitempty"`
@@ -3009,12 +3039,12 @@ type VendorApproval struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// Kind What the two-person approval authorises.
+	// Kind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation.
 	//
 	// Example: sign_in_code
 	Kind ApprovalKind `json:"kind"`
@@ -3024,12 +3054,12 @@ type VendorApproval struct {
 	// Example: +91*******210
 	MobileMasked *MobileMasked `json:"mobile_masked,omitempty"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-	OrganisationId Id `json:"organisation_id"`
+	OrganisationId *Id `json:"organisation_id,omitempty"`
 
-	// RequestedBy Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// RequestedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RequestedBy Id `json:"requested_by"`
@@ -3039,7 +3069,7 @@ type VendorApproval struct {
 	// Example: pending
 	State VendorApprovalState `json:"state"`
 
-	// SubjectId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SubjectId *Id `json:"subject_id,omitempty"`
@@ -3060,6 +3090,19 @@ type VendorApproval struct {
 // Example: pending
 type VendorApprovalState string
 
+// VendorApprovalGrant Signed, single-use grant (vendor realm, type vendor_approval, 5 minutes) for the kinds executed by another service (ADR-0014 A1.3). Its claims are the approval id, kind, organisation or none, requester, approver and a subject hash over the fields named per kind: organisation id and target status for org_suspend, org_reinstate and org_close; rule-set id, content hash and effective date for tax_rule_set_publish. The admin service passes it to the executing service and never to the browser. If the executor refuses, the approval stays approved and a fresh grant can be issued until it lapses.
+type VendorApprovalGrant struct {
+	// ExpiresAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	ExpiresAt Timestamp `json:"expires_at"`
+
+	// Token The signed grant.
+	//
+	// Example: grant.example
+	Token string `json:"token"`
+}
+
 // VendorApprovalPage A page of approvals.
 type VendorApprovalPage struct {
 	// Items Approvals on this page.
@@ -3076,12 +3119,12 @@ type VendorAuditEntry struct {
 	// Example: vendor.device.revoked
 	Action string `json:"action"`
 
-	// ActorVendorUserId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// ActorVendorUserId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ActorVendorUserId Id `json:"actor_vendor_user_id"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -3091,7 +3134,7 @@ type VendorAuditEntry struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	OccurredAt Timestamp `json:"occurred_at"`
 
-	// OrganisationId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId *Id `json:"organisation_id,omitempty"`
@@ -3116,12 +3159,12 @@ type VendorAuditEntry struct {
 	// Example: 203.0.113.7
 	SourceAddress *string `json:"source_address,omitempty"`
 
-	// SupportSessionId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// SupportSessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SupportSessionId *Id `json:"support_session_id,omitempty"`
 
-	// TargetId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// TargetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	TargetId *Id `json:"target_id,omitempty"`
@@ -3153,7 +3196,7 @@ type VendorDevice struct {
 	// Example: true
 	BillingCapable bool `json:"billing_capable"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -3173,7 +3216,7 @@ type VendorDevice struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	LastContactAt *Timestamp `json:"last_contact_at,omitempty"`
 
-	// OutletId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -3205,7 +3248,7 @@ type VendorPrincipal struct {
 	// Example: Priya
 	DisplayName string `json:"display_name"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -3221,7 +3264,7 @@ type VendorPrincipal struct {
 
 // VendorRevoke Revoke one active device on a verified request. Terminal; no un-revoke and no wipe.
 type VendorRevoke struct {
-	// ApprovalId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// ApprovalId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ApprovalId *Id `json:"approval_id,omitempty"`
@@ -3366,7 +3409,7 @@ type VendorUser struct {
 	// Example: staff@example.invalid
 	Email openapi_types.Email `json:"email"`
 
-	// Id Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -3403,7 +3446,7 @@ type VendorUserStatus string
 
 // WipeOrder Wipe order, signed by identity. The device verifies it covers every local operation before wiping.
 type WipeOrder struct {
-	// DeviceId Client-generated, time-sortable identifier (UUIDv7 or ULID).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -3508,19 +3551,19 @@ type WipeNotReady = Problem
 
 // RecordDeviceDrainedParams defines parameters for RecordDeviceDrained.
 type RecordDeviceDrainedParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CheckPackHistoryParams defines parameters for CheckPackHistory.
 type CheckPackHistoryParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // VerifyProofParams defines parameters for VerifyProof.
 type VerifyProofParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3556,8 +3599,14 @@ type CreateVendorApprovalParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// GetVendorApprovalParams defines parameters for GetVendorApproval.
+type GetVendorApprovalParams struct {
+	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
+	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 }
 
 // CancelVendorApprovalParams defines parameters for CancelVendorApproval.
@@ -3565,7 +3614,7 @@ type CancelVendorApprovalParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3574,7 +3623,7 @@ type ClaimCodeHalfParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3583,7 +3632,7 @@ type ApproveVendorApprovalParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3640,7 +3689,7 @@ type RevokeOrganisationDeviceParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3655,7 +3704,7 @@ type CreateOwnerInvitationParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3664,7 +3713,7 @@ type CancelOwnerInvitationParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3673,7 +3722,7 @@ type RenewOwnerInvitationParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3682,7 +3731,7 @@ type LookupOrganisationsByOwnerMobileParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3700,7 +3749,7 @@ type RenewVendorSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3709,7 +3758,7 @@ type CreateVendorSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3718,7 +3767,7 @@ type EndVendorSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3727,7 +3776,7 @@ type CompleteVendorSetupParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3736,7 +3785,7 @@ type BeginVendorSetupParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3745,7 +3794,7 @@ type StartSupportSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3760,7 +3809,7 @@ type EndSupportSessionParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3769,7 +3818,7 @@ type RenewSupportTokenParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3790,7 +3839,7 @@ type CreateVendorUserParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3799,7 +3848,7 @@ type UpdateVendorUserParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3808,13 +3857,13 @@ type ResetVendorUserTotpParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateActivationCodeParams defines parameters for CreateActivationCode.
 type CreateActivationCodeParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3832,13 +3881,13 @@ type ListApprovalRequestsParams struct {
 
 // CreateApprovalRequestParams defines parameters for CreateApprovalRequest.
 type CreateApprovalRequestParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // DecideApprovalRequestParams defines parameters for DecideApprovalRequest.
 type DecideApprovalRequestParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3877,19 +3926,19 @@ type ListBindingsParams struct {
 
 // RejectBindingParams defines parameters for RejectBinding.
 type RejectBindingParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ActivateDeviceParams defines parameters for ActivateDevice.
 type ActivateDeviceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateDeviceNonceParams defines parameters for CreateDeviceNonce.
 type CreateDeviceNonceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -3910,7 +3959,7 @@ type ListDevicesParams struct {
 
 // RegisterDeviceParams defines parameters for RegisterDevice.
 type RegisterDeviceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3919,7 +3968,7 @@ type RegisterDeviceParams struct {
 
 // RevokeDeviceParams defines parameters for RevokeDevice.
 type RevokeDeviceParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3940,7 +3989,7 @@ type ListMembersParams struct {
 
 // CreateMemberParams defines parameters for CreateMember.
 type CreateMemberParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3949,7 +3998,7 @@ type CreateMemberParams struct {
 
 // UpdateMemberParams defines parameters for UpdateMember.
 type UpdateMemberParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3958,7 +4007,7 @@ type UpdateMemberParams struct {
 
 // RemoveOwnerRoleParams defines parameters for RemoveOwnerRole.
 type RemoveOwnerRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3967,7 +4016,7 @@ type RemoveOwnerRoleParams struct {
 
 // AssignOwnerRoleParams defines parameters for AssignOwnerRole.
 type AssignOwnerRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3976,13 +4025,13 @@ type AssignOwnerRoleParams struct {
 
 // SetPinParams defines parameters for SetPin.
 type SetPinParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ClearPinLockoutParams defines parameters for ClearPinLockout.
 type ClearPinLockoutParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -3991,7 +4040,7 @@ type ClearPinLockoutParams struct {
 
 // AuthorisePinResetParams defines parameters for AuthorisePinReset.
 type AuthorisePinResetParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4000,7 +4049,7 @@ type AuthorisePinResetParams struct {
 
 // CreateRoleAssignmentParams defines parameters for CreateRoleAssignment.
 type CreateRoleAssignmentParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4009,7 +4058,7 @@ type CreateRoleAssignmentParams struct {
 
 // DeleteRoleAssignmentParams defines parameters for DeleteRoleAssignment.
 type DeleteRoleAssignmentParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4018,13 +4067,13 @@ type DeleteRoleAssignmentParams struct {
 
 // CreateOtpChallengeParams defines parameters for CreateOtpChallenge.
 type CreateOtpChallengeParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CancelOwnerRecoveryParams defines parameters for CancelOwnerRecovery.
 type CancelOwnerRecoveryParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -4039,7 +4088,7 @@ type ListRolesParams struct {
 
 // CreateRoleParams defines parameters for CreateRole.
 type CreateRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4048,7 +4097,7 @@ type CreateRoleParams struct {
 
 // DeleteRoleParams defines parameters for DeleteRole.
 type DeleteRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4057,7 +4106,7 @@ type DeleteRoleParams struct {
 
 // UpdateRoleParams defines parameters for UpdateRole.
 type UpdateRoleParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
 	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
@@ -4066,37 +4115,37 @@ type UpdateRoleParams struct {
 
 // CreateSessionParams defines parameters for CreateSession.
 type CreateSessionParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // EndSessionParams defines parameters for EndSession.
 type EndSessionParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateDeviceTokenParams defines parameters for CreateDeviceToken.
 type CreateDeviceTokenParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // CreateDrainTokenParams defines parameters for CreateDrainToken.
 type CreateDrainTokenParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // RefreshSessionParams defines parameters for RefreshSession.
 type RefreshSessionParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // SwitchMemberParams defines parameters for SwitchMember.
 type SwitchMemberParams struct {
-	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 or ULID is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid).
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
@@ -4329,6 +4378,9 @@ type ServerInterface interface {
 	// CreateVendorApproval File a two-person vendor approval
 	// (POST /internal/v1/vendor/approvals)
 	CreateVendorApproval(w http.ResponseWriter, r *http.Request, params CreateVendorApprovalParams)
+	// GetVendorApproval Get a vendor approval
+	// (GET /internal/v1/vendor/approvals/{approval_id})
+	GetVendorApproval(w http.ResponseWriter, r *http.Request, approvalId Id, params GetVendorApprovalParams)
 	// CancelVendorApproval Reject or cancel an approval
 	// (PUT /internal/v1/vendor/approvals/{approval_id}/cancellation)
 	CancelVendorApproval(w http.ResponseWriter, r *http.Request, approvalId Id, params CancelVendorApprovalParams)
@@ -4872,6 +4924,56 @@ func (siw *ServerInterfaceWrapper) CreateVendorApproval(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateVendorApproval(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVendorApproval operation middleware
+func (siw *ServerInterfaceWrapper) GetVendorApproval(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "approval_id" -------------
+	var approvalId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "approval_id", r.PathValue("approval_id"), &approvalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "approval_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetVendorApprovalParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Vendor-Client-Address" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Vendor-Client-Address")]; found {
+		var XVendorClientAddress VendorClientAddress
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Vendor-Client-Address", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Vendor-Client-Address", valueList[0], &XVendorClientAddress, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Vendor-Client-Address", Err: err})
+			return
+		}
+
+		params.XVendorClientAddress = &XVendorClientAddress
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVendorApproval(w, r, approvalId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9151,6 +9253,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/vendor/support-sessions/{support_session_id}/termination", wrapper.EndSupportSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/vendor/approvals", wrapper.ListVendorApprovals)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/approvals", wrapper.CreateVendorApproval)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}", wrapper.GetVendorApproval)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/decision", wrapper.ApproveVendorApproval)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/code-half-claims", wrapper.ClaimCodeHalf)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/cancellation", wrapper.CancelVendorApproval)

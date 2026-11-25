@@ -1,0 +1,9 @@
+# Client for the internal routes of the tenancy contract that identity calls (series issuance).
+package: tenancy
+output: internal/gen/tenancy/tenancy.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  include-operation-ids:
+    - issueDocumentSeries

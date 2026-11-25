@@ -96,7 +96,7 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 			revoked = append(revoked, o.ID)
 		}
 	}
-	series := []gen.PackSeries{} // the series registry belongs to tenancy; no client in this work package
+	series := packSeries(d) // issued by tenancy (the registry is its), stored with the device
 	sum := sha256.New()
 	_ = json.NewEncoder(sum).Encode([]any{members, revoked, series, d.State})
 	digest := crypto.B64(sum.Sum(nil))
@@ -114,7 +114,7 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 		if err := put(tx, kPackVer, d.TenantID, d.ID, pv, keys{}); err != nil {
 			return gen.OfflinePack{}, err
 		}
-		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Digest: digest, At: now}
+		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Series: seriesCodes(d), Digest: digest, At: now}
 		if err := put(tx, kPackHist, d.TenantID, h.ID, h, keys{k1: d.ID}); err != nil {
 			return gen.OfflinePack{}, err
 		}
@@ -149,6 +149,7 @@ func (s *Service) GetDeviceOfflinePack(ctx context.Context, id string) (gen.Offl
 		return gen.OfflinePack{}, errUnauth()
 	}
 	var out gen.OfflinePack
+	s.retryUnverifiedSeries(ctx, pr.TenantID, id)
 	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
 		d, err := get[device](tx, kDevice, pr.TenantID, id)
 		if err != nil || d == nil {

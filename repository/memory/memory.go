@@ -13,7 +13,6 @@ import (
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-common/events"
-	"github.com/hostryhq/go-common/ids"
 	"github.com/hostryhq/go-common/tenancy"
 	"github.com/hostryhq/svc-identity/repository"
 )
@@ -69,11 +68,12 @@ func (s *Store) SetAuditDB(db tenancy.TxBeginner) { s.auditDB = db }
 
 // Tx implements repository.Store.
 func (s *Store) Tx(ctx context.Context, scope string, fn func(repository.Tx) error) error {
-	if p, ok := auth.PrincipalFrom(ctx); ok && p.IsVendorActor() && s.auditDB != nil {
-		if _, has := tenancy.From(ctx); !has {
-			ctx = tenancy.With(ctx, tenancy.Context{TenantID: ids.ID(repository.Platform), ActorID: p.Subject})
+	if p, ok := auth.PrincipalFrom(ctx); ok && p.IsVendorActor() && s.auditDB != nil && repository.AuditModeOf(ctx) != repository.AuditNone {
+		audited := auth.WithAuditedTx
+		if repository.AuditModeOf(ctx) == repository.AuditPlatform { // no organisation named: the platform row, no tenant
+			audited = auth.WithPlatformAuditedTx
 		}
-		return auth.WithAuditedTx(ctx, s.auditDB, func(context.Context, *sql.Tx) error { return s.run(scope, fn) })
+		return audited(ctx, s.auditDB, func(context.Context, *sql.Tx) error { return s.run(scope, fn) })
 	}
 	return s.run(scope, fn)
 }

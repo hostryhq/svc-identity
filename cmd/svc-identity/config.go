@@ -20,6 +20,7 @@ import (
 	"github.com/hostryhq/go-common/clock"
 	"github.com/hostryhq/go-common/outbox"
 	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/tenancyclient"
 	"github.com/hostryhq/svc-identity/internal/token"
 	"github.com/hostryhq/svc-identity/service"
 )
@@ -37,6 +38,8 @@ type config struct {
 	MACKeyFile, ProofKeyFile, TOTPKeyFile     string // base64 files holding 32 random bytes
 	ServiceKeysDir                            string // directory of <service>.pub.pem public keys
 	OpSigningPub                              string // PEM public key of the sync gateway's op-signing key
+	TenancyURL                                string // HOSTRY_TENANCY_URL: base URL of the tenancy service (series issuance)
+	ServiceSigningKeyFile                     string // HOSTRY_SERVICE_SIGNING_KEY_FILE: identity's own service-token key (PEM PKCS#8 P-256)
 
 	SMS           string // HOSTRY_IDENTITY_SMS: "test" (dev only) ; "real" is not available (no DLT registration yet)
 	AllowTestSMS  bool   // HOSTRY_IDENTITY_ALLOW_TEST_SMS=1: the explicit dev flag
@@ -55,6 +58,7 @@ func loadConfig(get func(string) string) (*config, error) {
 		Migrate: get("HOSTRY_IDENTITY_AUTO_MIGRATE") == "1", TenantKeyFile: get("HOSTRY_IDENTITY_TENANT_KEY_FILE"), VendorKeyFile: get("HOSTRY_IDENTITY_VENDOR_KEY_FILE"),
 		PackKeyFile: get("HOSTRY_IDENTITY_PACK_KEY_FILE"), MACKeyFile: get("HOSTRY_IDENTITY_MAC_KEY_FILE"), ProofKeyFile: get("HOSTRY_IDENTITY_PROOF_KEY_FILE"),
 		TOTPKeyFile: get("HOSTRY_IDENTITY_TOTP_KEY_FILE"), ServiceKeysDir: get("HOSTRY_SERVICE_KEYS_DIR"), OpSigningPub: get("HOSTRY_OP_SIGNING_PUB_FILE"),
+		TenancyURL: get("HOSTRY_TENANCY_URL"), ServiceSigningKeyFile: get("HOSTRY_SERVICE_SIGNING_KEY_FILE"),
 		SMS: orDefault(get("HOSTRY_IDENTITY_SMS"), "test"), AllowTestSMS: get("HOSTRY_IDENTITY_ALLOW_TEST_SMS") == "1", AllowConsole: get("HOSTRY_IDENTITY_ALLOW_CONSOLE_MAIL") == "1",
 		SignInCode: get("HOSTRY_IDENTITY_VENDOR_SIGNIN_CODE") == "1", Recovery: get("HOSTRY_IDENTITY_VENDOR_RECOVERY") == "1",
 		NATSURL: get("HOSTRY_NATS_URL"), NATSSeedFile: get("HOSTRY_NATS_SEED_FILE"),
@@ -76,6 +80,9 @@ func loadConfig(get func(string) string) (*config, error) {
 		}
 		if c.ServiceKeysDir == "" {
 			bad("HOSTRY_SERVICE_KEYS_DIR is required outside dev, test and ci")
+		}
+		if c.TenancyURL == "" || c.ServiceSigningKeyFile == "" {
+			bad("HOSTRY_TENANCY_URL and HOSTRY_SERVICE_SIGNING_KEY_FILE are required outside dev, test and ci (series issuance)")
 		}
 	}
 	if c.SMS == "real" {
@@ -204,6 +211,19 @@ func (c *config) serviceRegistry() (*auth.ServiceVerifier, error) {
 		}
 	}
 	return &auth.ServiceVerifier{Registry: auth.NewStaticKeySet(auth.KeyDoc{Keys: keys}), Self: "identity", Clock: clock.System}, nil
+}
+
+// tenancy builds the client of the tenancy service. With no URL (dev, test and ci only; loadConfig
+// refuses that elsewhere) identity issues no series: a billing device registers without them.
+func (c *config) tenancy() (service.Tenancy, error) {
+	if c.TenancyURL == "" {
+		return nil, nil
+	}
+	k, err := token.LoadKey("identity", c.ServiceSigningKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	return tenancyclient.New(c.TenancyURL, &auth.ServiceSigner{Name: "identity", Key: k.Priv, Clock: clock.System}, nil)
 }
 
 func (c *config) smsSender(log *slog.Logger) (service.SMSSender, error) {

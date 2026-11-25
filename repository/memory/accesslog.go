@@ -13,6 +13,7 @@ import (
 type AccessLog struct {
 	mu          sync.Mutex
 	entries     []auth.VendorAccessEntry
+	platform    []auth.VendorAccessEntry
 	FailInTx    bool
 	FailRefused bool
 }
@@ -37,6 +38,37 @@ func (l *AccessLog) RecordRefused(_ context.Context, e auth.VendorAccessEntry) e
 	}
 	l.entries = append(l.entries, e)
 	return nil
+}
+
+// RecordPlatformInTx implements auth.PlatformAuditSink: the row has no tenant.
+func (l *AccessLog) RecordPlatformInTx(_ context.Context, _ tenancy.Execer, e auth.VendorAccessEntry) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.FailInTx {
+		return errInjected
+	}
+	e.TenantID = ""
+	l.platform = append(l.platform, e)
+	return nil
+}
+
+// RecordPlatformRefused implements auth.PlatformAuditSink.
+func (l *AccessLog) RecordPlatformRefused(_ context.Context, e auth.VendorAccessEntry) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.FailRefused {
+		return errInjected
+	}
+	e.TenantID = ""
+	l.platform = append(l.platform, e)
+	return nil
+}
+
+// PlatformEntries returns a copy of the platform rows (organisation-less routes) written so far.
+func (l *AccessLog) PlatformEntries() []auth.VendorAccessEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]auth.VendorAccessEntry(nil), l.platform...)
 }
 
 // Entries returns a copy of the rows written so far.

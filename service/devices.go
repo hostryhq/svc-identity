@@ -192,7 +192,7 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 		} else if d != nil {
 			dev = d
 		} else {
-			dev, err = s.createDevice(tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), in.Id, key, "", ac.By)
+			dev, err = s.createDevice(ctx, tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), in.Id, key, "", ac.By)
 			if err != nil {
 				return err
 			}
@@ -216,10 +216,18 @@ func (s *Service) activationFor(tx repository.Tx, code string) (*activationDoc, 
 }
 
 // createDevice stores a new active device, refusing a key already bound to an active device.
-func (s *Service) createDevice(tx repository.Tx, tenant, outlet, kind, name, keyProt, id string, key crypto.JWK, accountID, actorID string) (*device, error) {
+func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, outlet, kind, name, keyProt, id string, key crypto.JWK, accountID, actorID string) (*device, error) {
 	now := s.now()
 	d := &device{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, Name: name, State: "active", KeyProt: keyProt,
 		Billing: billingFor(kind), Key: key, Thumb: crypto.Thumbprint(key), AccountID: accountID, CreatedAt: now}
+	series, unverified, err := s.issueSeriesFor(ctx, tenant, outlet, id, kind)
+	if err != nil {
+		return nil, err
+	}
+	d.Series = series
+	if unverified {
+		d.RegUnverified, d.Billing = true, "none"
+	}
 	if err := put(tx, kDeviceIdx, repository.Global, id, struct {
 		TenantID string `json:"tenant_id"`
 	}{tenant}, keys{k1: d.Thumb, unique: true}); err != nil {
@@ -269,7 +277,7 @@ func (s *Service) RegisterDevice(ctx context.Context, in gen.RegisterDevice) (ge
 				acct = m.AccountID
 			}
 		}
-		d, err := s.createDevice(tx, p.TenantID, in.OutletId, string(in.Kind), in.Name, string(in.KeyProtection), in.Id, key, acct, p.Subject)
+		d, err := s.createDevice(ctx, tx, p.TenantID, in.OutletId, string(in.Kind), in.Name, string(in.KeyProtection), in.Id, key, acct, p.Subject)
 		if err != nil {
 			return err
 		}

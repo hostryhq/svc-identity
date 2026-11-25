@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -21,86 +20,6 @@ import (
 )
 
 const maxBody = 1 << 20
-
-// ---- authentication wrappers for the routes go-auth's Guard has no mode for ----
-
-func refuse(w http.ResponseWriter, r *http.Request, why string) {
-	apperr.WriteProblem(w, r, apperr.New(apperr.Unauthenticated, "auth.invalid_token", "invalid or missing credentials"))
-	_ = why // the reason is for logs; the response never says which check failed
-}
-
-func bearerToken(r *http.Request) string {
-	h := r.Header.Get("Authorization")
-	if len(h) > 7 && strings.EqualFold(h[:7], "bearer ") {
-		return strings.TrimSpace(h[7:])
-	}
-	return ""
-}
-
-// authenticated accepts any valid tenant-realm token of the listed types ("x-permission:
-// authenticated": the operation has no permission of its own and authorises by who the caller is).
-// A drain token is accepted only where listed (IST-24).
-func (h *Handler) authenticated(types []auth.TokenType, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tok := bearerToken(r)
-		if tok == "" {
-			refuse(w, r, "no bearer")
-			return
-		}
-		c, err := h.d.Tenant.Verify(tok)
-		if err != nil || !slices.Contains(types, c.Type) {
-			refuse(w, r, "token")
-			return
-		}
-		tid, err := ids.Parse(c.TenantID)
-		if err != nil {
-			refuse(w, r, "tid")
-			return
-		}
-		p := auth.NewPrincipal(c, tok)
-		ctx := service.WithCaller(r.Context(), p)
-		ctx = tenancy.With(ctx, tenancy.Context{TenantID: tid, ActorID: c.Subject, DeviceID: c.DeviceID})
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// serviceCaller requires a valid service token from one of the callers (internal routes that carry
-// no user token, such as the admin service's vendor sign-in).
-func (h *Handler) serviceCaller(callers []string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h.d.Services == nil {
-			refuse(w, r, "no registry")
-			return
-		}
-		c, err := h.d.Services.Verify(r.Header.Get(auth.ServiceTokenHeader))
-		if err != nil {
-			refuse(w, r, "service token")
-			return
-		}
-		if !slices.Contains(callers, c.Issuer) {
-			apperr.WriteProblem(w, r, apperr.New(apperr.Forbidden, "auth.caller_not_allowed", "caller not allowed"))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// vendorAuthenticated requires a valid vendor-realm user token.
-func (h *Handler) vendorAuthenticated(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tok := bearerToken(r)
-		if tok == "" {
-			refuse(w, r, "no bearer")
-			return
-		}
-		c, err := h.d.Vendor.Verify(tok)
-		if err != nil || c.Type != auth.TypeUser {
-			refuse(w, r, "token")
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(service.WithCaller(r.Context(), auth.NewPrincipal(c, tok))))
-	})
-}
 
 // ---- idempotency ----
 
@@ -139,7 +58,7 @@ func (h *Handler) idempotent(next http.Handler, spec routeSpec) http.Handler {
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
-		scope := ids.ID(repoPlatform)
+		scope := ids.ID(noTenantScope)
 		if tc, ok := tenancy.From(r.Context()); ok {
 			scope = tc.TenantID
 		}
@@ -161,7 +80,10 @@ func (h *Handler) idempotent(next http.Handler, spec routeSpec) http.Handler {
 			apperr.WriteProblem(w, r, err)
 		default:
 			if replayed {
-				h.auditReplay(w, r)
+				if aerr := h.auditReplay(r, spec, body); aerr != nil {
+					writeErr(w, r, aerr)
+					return
+				}
 			}
 			if resp.ContentType != "" {
 				w.Header().Set("Content-Type", resp.ContentType)
@@ -181,18 +103,48 @@ func copyHeaders(dst, src http.Header) {
 	}
 }
 
-// auditReplay records the access for a replayed vendor-authority request, which runs no handler:
-// the vendor access log is a condition for the response (ADR-0013 V5).
-func (h *Handler) auditReplay(_ http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFrom(r.Context())
-	if !ok || !p.IsVendorActor() {
-		return
-	}
-	tc, _ := tenancy.From(r.Context())
-	_ = h.s.TouchAudited(r.Context(), tc.TenantID.String())
+// platformAuditOps are the organisation-less vendor routes: their access row goes to the platform
+// table with no tenant (go-auth Policy.PlatformAudit). Everything else on a vendor route names its
+// organisation, through the path or, for startSupportSession, the body.
+var platformAuditOps = map[string]bool{
+	"listVendorUsers": true, "createVendorUser": true, "updateVendorUser": true, "resetVendorUserTotp": true,
+	"listVendorAuditEntries": true, "lookupOrganisationsByOwnerMobile": true, "endVendorSession": true,
+	"createVendorApproval": true, "listVendorApprovals": true, "getVendorApproval": true, "approveVendorApproval": true,
+	"claimCodeHalf": true, "cancelVendorApproval": true,
+	"getSupportSession": true, "renewSupportToken": true, "endSupportSession": true,
 }
 
-const repoPlatform = "00000000-0000-7000-8000-000000000000"
+// PlatformAuditOp reports whether an operation is recorded in the platform access log.
+func PlatformAuditOp(op string) bool { return platformAuditOps[op] }
+
+// noTenantScope is the idempotency-key scope of routes with no tenant. The key table is not tenant
+// data; this is a scope label, not a tenant.
+const noTenantScope = "00000000-0000-7000-8000-000000000000"
+
+// auditReplay records the access for a replayed vendor-authority request, which runs no handler:
+// the vendor access log is a condition for the response (ADR-0013 V5). It fails closed.
+func (h *Handler) auditReplay(r *http.Request, spec routeSpec, body []byte) error {
+	p, ok := auth.PrincipalFrom(r.Context())
+	if !ok || !p.IsVendorActor() {
+		return nil
+	}
+	if platformAuditOps[spec.Op] {
+		return h.s.TouchAudited(r.Context(), "")
+	}
+	org := r.PathValue("organisation_id")
+	if org == "" {
+		var b struct {
+			Org string `json:"organisation_id"`
+		}
+		_ = json.Unmarshal(body, &b)
+		org = b.Org
+	}
+	ctx, err := h.s.VendorOrgContext(r.Context(), spec.Permission, org)
+	if err != nil {
+		return err
+	}
+	return h.s.TouchAudited(ctx, org)
+}
 
 // ---- request and response helpers ----
 

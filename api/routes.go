@@ -17,6 +17,7 @@ import (
 	"github.com/hostryhq/go-common/idempotency"
 	"github.com/hostryhq/go-common/logx"
 	"github.com/hostryhq/svc-identity/internal/gen"
+	"github.com/hostryhq/svc-identity/repository"
 	"github.com/hostryhq/svc-identity/service"
 )
 
@@ -37,9 +38,11 @@ type Deps struct {
 	Services  *auth.ServiceVerifier
 	Approvals *auth.ApprovalChecker
 	Audit     auth.VendorAuditSink
-	Clock     clock.Clock
-	Idem      idempotency.Store
-	Log       *slog.Logger
+	// PlatformAudit records vendor access on organisation-less routes in a platform table with no tenant.
+	PlatformAudit auth.PlatformAuditSink
+	Clock         clock.Clock
+	Idem          idempotency.Store
+	Log           *slog.Logger
 	// TrustedProxies are the addresses whose X-Forwarded-For is believed for per-IP limits (IST-06).
 	TrustedProxies []netip.Prefix
 	Health         *health.Handler
@@ -57,7 +60,7 @@ func New(d Deps) http.Handler {
 	h := &Handler{d: d, s: d.Svc}
 	mux := http.NewServeMux()
 	g := &auth.Guard{Catalogue: d.Cat, Tenant: d.Tenant, Vendor: d.Vendor, Services: d.Services, Approvals: d.Approvals,
-		Audit: d.Audit, Clock: d.Clock, Log: d.Log}
+		Audit: d.Audit, PlatformAudit: d.PlatformAudit, Clock: d.Clock, Log: d.Log}
 	specs := map[string]routeSpec{}
 	for _, r := range routeTable {
 		specs[r.Pattern] = r
@@ -151,26 +154,43 @@ func (gr *guardRouter) HandleFunc(pattern string, fn func(http.ResponseWriter, *
 	gr.seen[pattern] = true
 	var inner http.Handler = http.HandlerFunc(fn)
 	inner = gr.h.idempotent(inner, spec)
+	mode := repository.AuditOrganisation
+	switch {
+	case spec.VendorAudit == "none":
+		mode = repository.AuditNone
+	case platformAuditOps[spec.Op]:
+		mode = repository.AuditPlatform
+	}
+	inner = withAuditMode(mode, inner)
 	realm := service.PermissionRealm(spec.Permission)
 	switch {
 	case spec.Permission == "public" && len(spec.Callers) == 0:
 		gr.g.Handle(gr.mux, pattern, auth.Policy{Public: true}, inner)
 	case spec.Permission == "public": // vendor sign-in and setup: the admin service's token is the credential
-		gr.mux.Handle(pattern, gr.h.serviceCaller(spec.Callers, inner))
+		gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, Public: true, Internal: true, Callers: spec.Callers}, inner)
 	case spec.Permission == "authenticated" && len(spec.Callers) == 0:
-		types := []auth.TokenType{auth.TypeUser, auth.TypePin, auth.TypeDevice}
-		if spec.Op == "getWipeOrder" {
-			types = []auth.TokenType{auth.TypeDrain}
+		if spec.Op == "getWipeOrder" { // drain tokens are accepted here and nowhere else (IST-24)
+			gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, AllowDrain: true}, inner)
+			break
 		}
-		gr.mux.Handle(pattern, gr.h.authenticated(types, inner))
+		gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, Authenticated: true}, inner)
 	case spec.Permission == "authenticated": // vendor session end: service token plus the vendor user's token
-		gr.mux.Handle(pattern, gr.h.serviceCaller(spec.Callers, gr.h.vendorAuthenticated(inner)))
+		gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, Authenticated: true, Realm: auth.RealmVendor, Internal: true, Callers: spec.Callers,
+			PlatformAudit: PlatformAuditOp(spec.Op)}, inner)
 	case realm == "service":
 		gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, ServiceOnly: true, Internal: true, Callers: spec.Callers, NoTenant: spec.Op == "listRevocations"}, inner)
 	case realm == "vendor":
 		gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, Permission: spec.Permission, StepUp: spec.StepUp, Internal: true, Callers: spec.Callers,
-			Realm: auth.RealmVendor, VendorAuditNone: spec.VendorAudit == "none", DirectoryClass: spec.VendorClass == "directory"}, inner)
+			Realm: auth.RealmVendor, VendorAuditNone: spec.VendorAudit == "none", DirectoryClass: spec.VendorClass == "directory",
+			PlatformAudit: PlatformAuditOp(spec.Op)}, inner)
 	default:
 		gr.g.Handle(gr.mux, pattern, auth.Policy{OperationID: spec.Op, Permission: spec.Permission, StepUp: spec.StepUp}, inner)
 	}
+}
+
+// withAuditMode tells the store how the request's vendor access is recorded (see repository.AuditMode).
+func withAuditMode(m repository.AuditMode, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(repository.WithAuditMode(r.Context(), m)))
+	})
 }

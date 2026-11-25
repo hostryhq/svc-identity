@@ -106,6 +106,12 @@ func (s *Signer) Vendor(c auth.Claims) (string, error) {
 // Opaque returns a 256-bit refresh token.
 func (s *Signer) Opaque() string { return s.Random.Token() }
 
+// VendorGrant signs a vendor approval grant with the vendor-realm key (ADR-0014 A1.3). Its claims are
+// not go-auth's Claims: the executing service verifies the grant against the vendor JWKS.
+func (s *Signer) VendorGrant(claims any) (string, error) {
+	return crypto.SignES256(s.VendorKey.Priv, s.VendorKey.Kid, "JWT", claims)
+}
+
 // Pack signs an offline pack or wipe order with the pack-signing key.
 func (s *Signer) Pack(claims any) (string, error) {
 	return crypto.SignES256(s.Packer.Priv, s.Packer.Kid, "pack", claims)

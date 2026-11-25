@@ -46,8 +46,12 @@ type Options struct {
 	// Store, AccessLog and Idem replace the in-memory repository, vendor access log and idempotency
 	// store (the integration tests run the same assembly over Postgres). All three or none.
 	Store     repository.Store
-	AccessLog auth.VendorAuditSink
+	AccessLog compose.AccessSink
 	Idem      idempotency.Store
+	// WithTenancy wires svc-tenancy's own double as the series registry (Double.Tenancy), so billing
+	// devices are issued real series codes and the checks against the tenancy contract run. Off by
+	// default: without it billing devices register with no series and no outlet check.
+	WithTenancy bool
 	// Config overrides the default configuration (keys and cheap PIN parameters are filled in).
 	Config func(*service.Config)
 }
@@ -65,6 +69,7 @@ type Double struct {
 	Notices  *Notices
 	Mail     *Mail
 	Access   *memory.AccessLog
+	Tenancy  *Tenancy // nil unless Options.WithTenancy
 	Idem     idempotency.Store
 	Verifier *auth.Verifier
 }
@@ -181,7 +186,7 @@ func New(o Options) *Double {
 	mem.SetAuditDB(nopsql.DB())
 	acc := &memory.AccessLog{}
 	var st repository.Store = mem
-	var accessSink auth.VendorAuditSink = acc
+	var accessSink compose.AccessSink = acc
 	var idemStore idempotency.Store = idempotency.NewMemory()
 	if o.Store != nil {
 		st, accessSink, idemStore, mem = o.Store, o.AccessLog, o.Idem, nil
@@ -217,15 +222,24 @@ func New(o Options) *Double {
 		logOut = io.Discard
 	}
 	sms, notes, mailer := &SMS{}, &Notices{}, &Mail{}
+	var ten *Tenancy
+	var tenClient service.Tenancy
+	if o.WithTenancy {
+		env, cl, err := newTenancy()
+		if err != nil {
+			panic(err)
+		}
+		ten, tenClient = env, cl
+	}
 	reg := authtest.NewServiceRegistry(clk, "sync", "admin")
 	res, err := compose.Assemble(compose.Parts{
 		Cfg: cfg, Store: st, AccessLog: accessSink, Idem: idemStore, Clock: clk, NewID: clk.IDs().New, Rand: rnd, SMS: sms, Notify: notes, Mail: mailer,
-		Signer: signer, Tokens: issuer, Assertions: assertions, Services: reg.Verifier("identity"), Log: slog.New(slog.NewJSONHandler(logOut, nil)),
+		Signer: signer, Tenancy: tenClient, Tokens: issuer, Assertions: assertions, Services: reg.Verifier("identity"), Log: slog.New(slog.NewJSONHandler(logOut, nil)),
 	})
 	if err != nil {
 		panic(err)
 	}
-	return &Double{Handler: res.Handler, Service: res.Service, Store: st, Memory: mem, Clock: clk, Signer: signer, Services: reg, SMS: sms, Notices: notes, Mail: mailer, Access: acc, Idem: idemStore, Verifier: res.Verifier}
+	return &Double{Handler: res.Handler, Service: res.Service, Store: st, Memory: mem, Clock: clk, Signer: signer, Services: reg, SMS: sms, Notices: notes, Mail: mailer, Access: acc, Tenancy: ten, Idem: idemStore, Verifier: res.Verifier}
 }
 
 func fixedKey(seed byte, n int) []byte {

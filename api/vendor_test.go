@@ -270,7 +270,7 @@ func TestVendorDeviceRevokeQuotaAndSecondApprover(t *testing.T) {
 	}
 	// With no second eligible vendor user the request is refused; a user created now is too new (7-day rule).
 	var ap gen.VendorApproval
-	req := gen.CreateVendorApproval{Kind: gen.ApprovalKindDeviceRevokeOverQuota, OrganisationId: org.String(), SubjectId: &devs[2].ID, Reason: "Owner called: tablet stolen", TicketReference: "SUP-1",
+	req := gen.CreateVendorApproval{Kind: gen.ApprovalKindDeviceRevokeOverQuota, OrganisationId: strPtr(org.String()), SubjectId: &devs[2].ID, Reason: "Owner called: tablet stolen", TicketReference: "SUP-1",
 		VerificationMethod: gen.RequesterVerificationCallbackToRegisteredNumber}
 	e.expect(409, "second_approver_unavailable", "POST", "/internal/v1/vendor/approvals", admin.tok, req, admin.h(e)...)
 	second := e.newVendorUser(admin, "second@hostry.test", gen.PlatformAdmin)
@@ -316,7 +316,7 @@ func TestVendorDeviceRevokeQuotaAndSecondApprover(t *testing.T) {
 func TestVendorAssistedSignInCode(t *testing.T) {
 	e := newEnv(t)
 	admin := e.bootstrapAdmin("root@hostry.test")
-	body := gen.CreateVendorApproval{Kind: gen.ApprovalKindSignInCode, OrganisationId: org.String(), MobileE164: strPtr(ownerMobile), Reason: "Owner has no SMS in the hills",
+	body := gen.CreateVendorApproval{Kind: gen.ApprovalKindSignInCode, OrganisationId: strPtr(org.String()), MobileE164: strPtr(ownerMobile), Reason: "Owner has no SMS in the hills",
 		TicketReference: "ONB-7", VerificationMethod: gen.RequesterVerificationOwnerRequestInApp}
 	e.expect(403, "vendor_assist_disabled", "POST", "/internal/v1/vendor/approvals", admin.tok, body, admin.h(e)...)
 

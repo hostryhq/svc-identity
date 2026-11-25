@@ -20,11 +20,18 @@ import (
 	"github.com/hostryhq/svc-identity/service"
 )
 
+// AccessSink records vendor access: organisation rows (VendorAuditSink) and organisation-less rows in a
+// platform table with no tenant (PlatformAuditSink).
+type AccessSink interface {
+	auth.VendorAuditSink
+	auth.PlatformAuditSink
+}
+
 // Parts are the collaborators to assemble.
 type Parts struct {
 	Cfg        service.Config
 	Store      repository.Store
-	AccessLog  auth.VendorAuditSink
+	AccessLog  AccessSink
 	Idem       idempotency.Store
 	Clock      clock.Clock
 	NewID      func() ids.ID
@@ -36,9 +43,11 @@ type Parts struct {
 	Tokens     service.TokenIssuer // defaults to Signer
 	Assertions service.AssertionVerifier
 	Services   *auth.ServiceVerifier
-	Log        *slog.Logger
-	Health     *health.Handler
-	SMSAsync   bool
+	// Tenancy issues document-series codes for billing devices (nil: none are issued).
+	Tenancy  service.Tenancy
+	Log      *slog.Logger
+	Health   *health.Handler
+	SMSAsync bool
 }
 
 // Result is the assembled service.
@@ -62,7 +71,7 @@ func Assemble(p Parts) (*Result, error) {
 		p.Assertions = service.ES256Assertions{}
 	}
 	svc := &service.Service{Cfg: p.Cfg, Store: p.Store, Clock: p.Clock, NewID: p.NewID, Rand: p.Rand, SMS: p.SMS, Notify: p.Notify, Mail: p.Mail,
-		Tokens: p.Tokens, Cat: cat, Grants: grantlimit.Evaluator{Catalogue: cat}, Assertions: p.Assertions, Approvable: api.ApprovableOperation(cat), SMSAsync: p.SMSAsync}
+		Tokens: p.Tokens, Cat: cat, Grants: grantlimit.Evaluator{Catalogue: cat}, Assertions: p.Assertions, Approvable: api.ApprovableOperation(cat), SMSAsync: p.SMSAsync, Tenancy: p.Tenancy}
 	if err := svc.StartupCheck(); err != nil {
 		return nil, err
 	}
@@ -73,7 +82,7 @@ func Assemble(p Parts) (*Result, error) {
 		Svc: svc, Cat: cat, Tenant: tenant,
 		Vendor:    &auth.Verifier{Keys: p.Signer.VendorKeys(), Issuer: token.VendorIssuer, Audience: token.VendorAudience, Realm: auth.RealmVendor, Clock: p.Clock},
 		Services:  p.Services,
-		Approvals: approvals, Audit: p.AccessLog, Clock: p.Clock, Idem: p.Idem, Log: p.Log, Health: p.Health,
+		Approvals: approvals, Audit: p.AccessLog, PlatformAudit: p.AccessLog, Clock: p.Clock, Idem: p.Idem, Log: p.Log, Health: p.Health,
 	})
 	return &Result{Service: svc, Handler: h, Verifier: tenant, Catalog: cat}, nil
 }

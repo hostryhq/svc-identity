@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	auth "github.com/hostryhq/go-auth"
 	"time"
 
 	"github.com/hostryhq/svc-identity/internal/crypto"
@@ -36,6 +37,16 @@ func (sd *Seeder) Device(ctx context.Context, tenant string, d SeedDevice) error
 		for st, seq := range d.DrainedThrough {
 			doc.DrainedThr = append(doc.DrainedThr, stream{Stream: st, Seq: seq})
 		}
+		if d.State == "active" && s.Tenancy != nil {
+			series, unverified, err := s.issueSeriesFor(ctx, tenant, d.Outlet, d.ID, d.Kind)
+			if err != nil {
+				return err
+			}
+			doc.Series = series
+			if unverified {
+				doc.RegUnverified, doc.Billing = true, "none"
+			}
+		}
 		k1 := doc.Thumb
 		if d.State != "active" {
 			k1 = "revoked:" + d.ID
@@ -46,6 +57,15 @@ func (sd *Seeder) Device(ctx context.Context, tenant string, d SeedDevice) error
 			return err
 		}
 		return put(tx, kDevice, tenant, d.ID, doc, keys{k1: d.Outlet})
+	})
+}
+
+// BuiltInOwnerRole stores the built-in Owner role with a fixed id.
+func (sd *Seeder) BuiltInOwnerRole(ctx context.Context, tenant, id string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		now := s.now()
+		return put(tx, kRole, tenant, id, role{ID: id, Name: "Owner", BuiltIn: true, Perms: []string{"*"}, CreatedAt: now, UpdatedAt: now}, keys{})
 	})
 }
 
@@ -156,7 +176,7 @@ func (sd *Seeder) ApprovalRequest(ctx context.Context, tenant, id, memberID, acc
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
 		now := s.now()
-		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:3f2a", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
 		return put(tx, kApprReq, repository.Global, id, r, keys{k1: tenant, k2: accountID})
 	})
 }
@@ -271,5 +291,81 @@ func (sd *Seeder) OwnerCount(ctx context.Context, tenant string, n int) error {
 	s := sd.s
 	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
 		return put(tx, kOwnerCount, repository.Global, tenant, ownerCount{N: n}, keys{})
+	})
+}
+
+// RevokeDevice revokes a device as the vendor operation does (state, revocation feed, event, audit).
+func (sd *Seeder) RevokeDevice(ctx context.Context, tenant, deviceID, reason, by string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		d, err := get[device](tx, kDevice, tenant, deviceID)
+		if err != nil || d == nil {
+			return notFoundOr(err)
+		}
+		return s.revokeDeviceTx(tx, d, reason, by)
+	})
+}
+
+// DrainDevice records that a revoked device drained through the given streams.
+func (sd *Seeder) DrainDevice(ctx context.Context, tenant, deviceID string, through map[string]int) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		d, err := get[device](tx, kDevice, tenant, deviceID)
+		if err != nil || d == nil {
+			return notFoundOr(err)
+		}
+		d.State, d.DrainedAt = "drained", s.now()
+		for st, seq := range through {
+			d.DrainedThr = append(d.DrainedThr, stream{Stream: st, Seq: seq})
+		}
+		return put(tx, kDevice, tenant, deviceID, d, keys{k1: d.OutletID})
+	})
+}
+
+// PinLocked locks a member's PIN on a device (repeated wrong PINs).
+func (sd *Seeder) PinLocked(ctx context.Context, tenant, deviceID, memberID string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		return put(tx, kProofFail, tenant, deviceID+":"+memberID, failDoc{Locked: true}, keys{k1: memberID})
+	})
+}
+
+// AssignRole adds a role assignment to a member (an owner assignment counts as an owner).
+func (sd *Seeder) AssignRole(ctx context.Context, tenant, memberID, assignmentID, roleID string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		m, err := get[member](tx, kMember, tenant, memberID)
+		if err != nil || m == nil {
+			return notFoundOr(err)
+		}
+		m.Assignments = append(m.Assignments, assignment{ID: assignmentID, RoleID: roleID})
+		if err := put(tx, kMember, tenant, memberID, m, keys{k1: m.AccountID}); err != nil {
+			return err
+		}
+		if _, ownerID, _ := s.loadRoles(tx, tenant); ownerID == roleID {
+			return s.adjustOwners(tx, tenant, +1)
+		}
+		return nil
+	})
+}
+
+// ApproveRequest marks a caution approval request approved by another member and issues its approval
+// token, as a real decision does.
+func (sd *Seeder) ApproveRequest(ctx context.Context, tenant, id, approver string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		r, err := get[approvalReq](tx, kApprReq, repository.Global, id)
+		if err != nil || r == nil {
+			return notFoundOr(err)
+		}
+		now := s.now()
+		claims := auth.Claims{Subject: r.Member, Type: auth.TypeApproval, TenantID: r.TenantID, SessionID: r.Session, Operation: r.Operation,
+			BodyHash: claimBodyHash(r.BodyHash), IssuedAt: now.Unix(), ExpiresAt: now.Add(s.Cfg.ApprovalTokTTL).Unix(), JTI: string(s.NewID())}
+		tok, err := s.Tokens.Access(claims)
+		if err != nil {
+			return err
+		}
+		r.State, r.Approver, r.Token = "approved", approver, tok
+		return put(tx, kApprReq, repository.Global, r.ID, r, keys{k1: r.TenantID, k2: r.AccountID})
 	})
 }

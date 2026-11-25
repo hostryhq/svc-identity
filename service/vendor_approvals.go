@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"time"
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-common/apperr"
+	"github.com/hostryhq/go-common/ids"
 	"github.com/hostryhq/svc-identity/internal/crypto"
 	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/repository"
@@ -37,18 +40,62 @@ type vendorApproval struct {
 	CodeUntil    time.Time `json:"code_until,omitempty"`
 	Used         bool      `json:"used,omitempty"`
 	TenantCancel bool      `json:"tenant_cancelled,omitempty"`
+	// Grant kinds (executed by another service): the rule set a tax_rule_set_publish names.
+	RuleSetID   string `json:"rule_set_id,omitempty"`
+	RuleSetHash string `json:"rule_set_content_hash,omitempty"`
+	Effective   string `json:"effective_date,omitempty"`
+}
+
+// grantKind reports whether the approval kind is executed by another service with a vendor approval
+// grant from the decision (ADR-0014 A1.3). These lapse after 24 hours and need no sign-in code or delay.
+func grantKind(kind string) bool {
+	switch kind {
+	case "org_suspend", "org_reinstate", "org_close", "tax_rule_set_publish":
+		return true
+	}
+	return false
+}
+
+// targetStatus is the organisation status an org_* approval authorises (part of the grant subject hash).
+func targetStatus(kind string) string {
+	switch kind {
+	case "org_suspend":
+		return "suspended"
+	case "org_reinstate":
+		return "active"
+	case "org_close":
+		return "closed"
+	}
+	return ""
+}
+
+// subjectHash binds the grant to what it authorises: organisation id and target status for the org_*
+// kinds; rule-set id, content hash and effective date for tax_rule_set_publish.
+func (a *vendorApproval) subjectHash() string {
+	var parts []string
+	if a.Kind == "tax_rule_set_publish" {
+		parts = []string{a.Kind, a.RuleSetID, a.RuleSetHash, a.Effective}
+	} else {
+		parts = []string{a.Kind, a.Org, targetStatus(a.Kind)}
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func (a *vendorApproval) effective(now time.Time) string {
-	if (a.State == "pending") && !now.Before(a.ExpiresAt) {
+	if (a.State == "pending" || (a.State == "approved" && grantKind(a.Kind))) && !now.Before(a.ExpiresAt) {
 		return "expired"
 	}
 	return a.State
 }
 
 func approvalDTOV(a *vendorApproval, now time.Time) gen.VendorApproval {
-	g := gen.VendorApproval{Id: a.ID, Kind: gen.ApprovalKind(a.Kind), OrganisationId: a.Org, RequestedBy: a.Requester, State: gen.VendorApprovalState(a.effective(now)),
+	g := gen.VendorApproval{Id: a.ID, Kind: gen.ApprovalKind(a.Kind), RequestedBy: a.Requester, State: gen.VendorApprovalState(a.effective(now)),
 		TicketReference: a.Ticket, VerificationMethod: gen.RequesterVerification(a.Verified), CreatedAt: a.CreatedAt, ExpiresAt: a.ExpiresAt}
+	if a.Org != "" {
+		x := a.Org
+		g.OrganisationId = &x
+	}
 	if a.Approver != "" {
 		x := a.Approver
 		g.ApprovedBy = &x
@@ -76,6 +123,10 @@ func kindPerms(kind string) (create, approve string) {
 		return "admin.recovery.create", "admin.recovery.approve"
 	case "device_revoke_over_quota":
 		return "admin.device.revoke", "admin.device.revoke"
+	case "org_suspend", "org_reinstate", "org_close":
+		return "admin.org.lifecycle.request", "admin.org.lifecycle.approve"
+	case "tax_rule_set_publish":
+		return "admin.taxrules.publish", "admin.taxrules.publish"
 	}
 	return "", ""
 }
@@ -133,19 +184,30 @@ func (s *Service) CreateVendorApproval(ctx context.Context, in gen.CreateVendorA
 	if len(strings.TrimSpace(in.Reason)) < 10 || strings.TrimSpace(in.TicketReference) == "" || !in.VerificationMethod.Valid() {
 		return gen.VendorApproval{}, errInvalid("reason", "invalid")
 	}
-	ctx, err = s.vendorOrg(ctx, create, in.OrganisationId)
-	if err != nil {
-		return gen.VendorApproval{}, err
+	org := deref(in.OrganisationId)
+	if kind == "tax_rule_set_publish" { // concerns no organisation
+		if org != "" || in.RuleSetId == nil || in.RuleSetContentHash == nil || in.EffectiveDate == nil {
+			return gen.VendorApproval{}, errInvalid("rule_set_id", "required")
+		}
+	} else if _, err := ids.Parse(org); err != nil {
+		return gen.VendorApproval{}, errInvalid("organisation_id", "required")
 	}
+	// The route is organisation-less (platform access log); the organisation named in the body is
+	// the scope of the stored record, never the caller's tenancy context.
 	var out gen.VendorApproval
-	err = s.Store.Tx(ctx, in.OrganisationId, func(tx repository.Tx) error {
+	err = s.Store.Tx(ctx, org, func(tx repository.Tx) error {
 		now := s.now()
-		a := vendorApproval{ID: string(s.NewID()), Kind: kind, Requester: pr.VendorUser(), Org: in.OrganisationId, Reason: strings.TrimSpace(in.Reason),
+		a := vendorApproval{ID: string(s.NewID()), Kind: kind, Requester: pr.VendorUser(), Org: org, Reason: strings.TrimSpace(in.Reason),
 			Ticket: strings.TrimSpace(in.TicketReference), Verified: string(in.VerificationMethod), State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.LongApprovalTTL)}
 		if in.SubjectId != nil {
 			a.Subject = *in.SubjectId
 		}
+		auth.SetAuditTarget(ctx, a.ID)
 		switch kind {
+		case "org_suspend", "org_reinstate", "org_close":
+			// the executing service (tenancy) checks the organisation's state; nothing more is stored here
+		case "tax_rule_set_publish":
+			a.RuleSetID, a.RuleSetHash, a.Effective = *in.RuleSetId, *in.RuleSetContentHash, in.EffectiveDate.Format("2006-01-02")
 		case "sign_in_code":
 			a.ExpiresAt = now.Add(s.Cfg.SignInApprovalTTL)
 			if in.MobileE164 == nil || !mobileRE.MatchString(*in.MobileE164) {
@@ -177,14 +239,14 @@ func (s *Service) CreateVendorApproval(ctx context.Context, in gen.CreateVendorA
 			if err != nil {
 				return err
 			}
-			if acct == nil || !s.accountIsOwner(tx, acct.ID, in.OrganisationId) {
+			if acct == nil || !s.accountIsOwner(tx, acct.ID, org) {
 				return errNotFound()
 			}
 			if acct.RecoveryNeedsAdmin && !s.vendorIsRole(tx, pr.VendorUser(), "platform_admin") {
 				return approvalConflict("platform_admin_required")
 			}
 		case "device_revoke_over_quota":
-			if d, err := get[device](tx, kDevice, in.OrganisationId, a.Subject); err != nil || d == nil {
+			if d, err := get[device](tx, kDevice, org, a.Subject); err != nil || d == nil {
 				return notFoundOr(err)
 			}
 		}
@@ -282,8 +344,9 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 		if err != nil || u == nil {
 			return notFoundOr(err)
 		}
+		reissue := grantKind(a.Kind) && a.effective(now) == "approved" && a.Approver == u.ID
 		switch {
-		case a.effective(now) != "pending":
+		case a.effective(now) != "pending" && !reissue:
 			return approvalConflict("approval_not_pending")
 		case a.Requester == u.ID:
 			return approvalConflict("approver_is_requester")
@@ -304,6 +367,13 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 			return err
 		}
 		a.State, a.Approver = "approved", u.ID
+		if grantKind(a.Kind) {
+			g, err := s.vendorGrant(a, now)
+			if err != nil {
+				return err
+			}
+			out.Grant = &g
+		}
 		switch a.Kind {
 		case "sign_in_code":
 			code := s.Rand.Alphabet(8, crypto.CodeAlphabet)
@@ -321,20 +391,74 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 			return err
 		}
 		out.Approval = approvalDTOV(a, now)
+		auth.SetAuditTarget(ctx, a.ID)
 		return s.vendorAudit(ctx, tx, vaudit{Org: a.Org, Action: "vendor.approval.approved", Target: a.ID, Ticket: a.Ticket})
 	})
 	if err != nil {
 		return out, err
 	}
-	if refuse == nil && out.Approval.Kind == gen.ApprovalKindOwnerRecovery || out.Approval.Kind == gen.ApprovalKindSignInCode {
-		if e := s.Store.Tx(ctx, out.Approval.OrganisationId, func(tx repository.Tx) error {
-			return s.audit(tx, out.Approval.OrganisationId, auditDoc{Action: "vendor.approval." + string(out.Approval.Kind) + ".approved", ActorKind: "vendor", ActorLbl: "Hostry support",
+	if refuse == nil && (out.Approval.Kind == gen.ApprovalKindOwnerRecovery || out.Approval.Kind == gen.ApprovalKindSignInCode) {
+		org := deref(out.Approval.OrganisationId)
+		if e := s.Store.Tx(ctx, org, func(tx repository.Tx) error {
+			return s.audit(tx, org, auditDoc{Action: "vendor.approval." + string(out.Approval.Kind) + ".approved", ActorKind: "vendor", ActorLbl: "Hostry support",
 				Outcome: "succeeded", Target: out.Approval.Id, Ticket: out.Approval.TicketReference, Show: true, Summary: "requested by " + out.Approval.RequestedBy + ", approved by " + deref(out.Approval.ApprovedBy)})
 		}); e != nil {
 			return out, e
 		}
 	}
 	return out, refuse
+}
+
+// vendorGrantClaims is the claim set of a vendor approval grant (ADR-0014 A1.3): the approval, what
+// it authorises (kind, organisation or none, subject hash) and the two people involved.
+type vendorGrantClaims struct {
+	Issuer      string `json:"iss"`
+	Audience    string `json:"aud"`
+	Subject     string `json:"sub"` // the approval id
+	Realm       string `json:"realm"`
+	Type        string `json:"typ"`
+	Kind        string `json:"kind"`
+	Org         string `json:"org,omitempty"`
+	Requester   string `json:"requester"`
+	Approver    string `json:"approver"`
+	SubjectHash string `json:"subject_hash"`
+	IssuedAt    int64  `json:"iat"`
+	ExpiresAt   int64  `json:"exp"`
+	JTI         string `json:"jti"`
+}
+
+// GrantTTL is the lifetime of a vendor approval grant.
+const GrantTTL = 5 * time.Minute
+
+func (s *Service) vendorGrant(a *vendorApproval, now time.Time) (gen.VendorApprovalGrant, error) {
+	exp := now.Add(GrantTTL)
+	tok, err := s.Tokens.VendorGrant(vendorGrantClaims{Issuer: "hostry-identity-vendor", Audience: "hostry-vendor", Subject: a.ID, Realm: "vendor", Type: "vendor_approval",
+		Kind: a.Kind, Org: a.Org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(), IssuedAt: now.Unix(), ExpiresAt: exp.Unix(), JTI: string(s.NewID())})
+	return gen.VendorApprovalGrant{Token: tok, ExpiresAt: exp}, err
+}
+
+// GetVendorApproval returns an approval to the vendor user who requested it or may approve it;
+// anyone else gets 404.
+func (s *Service) GetVendorApproval(ctx context.Context, id string) (gen.VendorApproval, error) {
+	pr, err := s.vendorPrincipal(ctx)
+	if err != nil {
+		return gen.VendorApproval{}, err
+	}
+	var out gen.VendorApproval
+	err = s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		a, err := get[vendorApproval](tx, kVendorAppr, repository.Global, id)
+		if err != nil || a == nil {
+			return notFoundOr(err)
+		}
+		_, ap := kindPerms(a.Kind)
+		if a.Requester != pr.VendorUser() && !s.holdsVendorPerm(ctx, ap) {
+			return errNotFound()
+		}
+		auth.SetAuditTarget(ctx, a.ID)
+		out = approvalDTOV(a, s.now())
+		return s.vendorAudit(ctx, tx, vaudit{Org: a.Org, Action: "vendor.approval.read", Target: a.ID})
+	})
+	return out, err
 }
 
 // ClaimCodeHalf shows the requester characters 1 to 4, once.

@@ -90,11 +90,12 @@ type Notice struct {
 // TokenIssuer signs tokens. Implementations: the ES256 signer (real), a literal-token issuer for
 // the contract double (serves the spec's examples) and test fakes.
 type TokenIssuer interface {
-	Access(c auth.Claims) (string, error) // tenant realm: user, pin, device, drain, support, approval
-	Vendor(c auth.Claims) (string, error) // vendor realm
-	Opaque() string                       // refresh token, 256-bit
-	Pack(claims any) (string, error)      // offline pack and wipe order JWS
-	JWKS(vendor bool) []KeyInfo           // published public keys: current and pre-published next
+	Access(c auth.Claims) (string, error)   // tenant realm: user, pin, device, drain, support, approval
+	Vendor(c auth.Claims) (string, error)   // vendor realm
+	Opaque() string                         // refresh token, 256-bit
+	Pack(claims any) (string, error)        // offline pack and wipe order JWS
+	VendorGrant(claims any) (string, error) // vendor approval grant for another service (typ vendor_approval)
+	JWKS(vendor bool) []KeyInfo             // published public keys: current and pre-published next
 }
 
 // KeyInfo is a published key with its id.
@@ -175,6 +176,8 @@ type Config struct {
 	// Products add theirs with their own catalogue entries; the test double adds the restaurant ones
 	// the specification examples use.
 	ExtraPermissions []string
+	// SeriesDocTypes are the document types a billing device is issued series for (default tax_invoice).
+	SeriesDocTypes []string
 }
 
 // DefaultConfig returns the ADR defaults with keys left empty (callers must set them).
@@ -209,8 +212,10 @@ type Service struct {
 	Notify Notifier
 	Mail   MailSender
 	Tokens TokenIssuer
-	Cat    *auth.Catalogue
-	Grants grantlimit.Evaluator
+	// Tenancy issues document-series codes for billing devices; nil in development issues none.
+	Tenancy Tenancy
+	Cat     *auth.Catalogue
+	Grants  grantlimit.Evaluator
 	// Assertions verifies device-key assertions; production uses the ES256 verifier of this package.
 	Assertions AssertionVerifier
 	// SMSAsync sends the OTP text after the response is written, so a known number does not answer

@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"time"
 
 	auth "github.com/hostryhq/go-auth"
@@ -49,20 +53,20 @@ func (s *Service) underCaution(b *binding) bool { return b != nil && s.now().Bef
 
 // CreateApprovalRequest files a refused operation for approval from another binding (A2.2 item 6).
 // The approver's app shows the stored operation and body, never requester-supplied text.
-func (s *Service) CreateApprovalRequest(ctx context.Context, in gen.CreateApprovalRequest) (gen.ApprovalRequest, error) {
+func (s *Service) CreateApprovalRequest(ctx context.Context, operationID string, requestBody []byte) (gen.ApprovalRequest, error) {
 	pr, ok := principal(ctx)
 	if !ok {
 		return gen.ApprovalRequest{}, errUnauth()
 	}
-	if s.Approvable != nil && !s.Approvable(in.OperationId) {
+	if s.Approvable != nil && !s.Approvable(operationID) {
 		return gen.ApprovalRequest{}, errInvalid("operation_id", "not_approvable")
 	}
-	body, err := json.Marshal(in.RequestBody)
-	if err != nil {
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(requestBody, &obj) != nil || obj == nil {
 		return gen.ApprovalRequest{}, errInvalid("request_body", "invalid")
 	}
 	var out gen.ApprovalRequest
-	err = s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
+	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
 		sess, _, err := s.callerSession(tx, pr)
 		if err != nil {
 			return err
@@ -72,7 +76,7 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in gen.CreateApprov
 		}
 		now := s.now()
 		r := approvalReq{ID: string(s.NewID()), TenantID: pr.TenantID, AccountID: sess.AccountID, Member: pr.Subject, Session: sess.ID,
-			Operation: in.OperationId, BodyHash: auth.BodyHash(body), State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
+			Operation: operationID, BodyHash: BodyHashField(requestBody), State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
 		if err := put(tx, kApprReq, repository.Global, r.ID, r, keys{k1: r.TenantID, k2: r.AccountID}); err != nil {
 			return err
 		}
@@ -80,6 +84,24 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in gen.CreateApprov
 		return nil
 	})
 	return out, err
+}
+
+// BodyHashField is the approval's body_hash as the contract states it: "sha256:" and the lower-case hex
+// SHA-256 over the exact body bytes as sent. The bh claim of the approval token carries the same digest
+// in go-auth's encoding (auth.BodyHash, base64url), which is what auth.VerifyBodyHash and the
+// approval checker compare against the repeated request.
+func BodyHashField(body []byte) string {
+	sum := sha256.Sum256(body)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// claimBodyHash converts a stored body_hash field to the bh claim value.
+func claimBodyHash(field string) string {
+	raw, err := hex.DecodeString(strings.TrimPrefix(field, "sha256:"))
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
 func approvalDTO(r *approvalReq, now time.Time, showToken bool) gen.ApprovalRequest {
@@ -197,7 +219,7 @@ func (s *Service) DecideApprovalRequest(ctx context.Context, id string, in gen.D
 		} else {
 			r.State, r.Approver = "approved", pr.Subject
 			claims := auth.Claims{Subject: r.Member, Type: auth.TypeApproval, TenantID: r.TenantID, SessionID: r.Session, Operation: r.Operation,
-				BodyHash: r.BodyHash, IssuedAt: now.Unix(), ExpiresAt: now.Add(s.Cfg.ApprovalTokTTL).Unix(), JTI: string(s.NewID())}
+				BodyHash: claimBodyHash(r.BodyHash), IssuedAt: now.Unix(), ExpiresAt: now.Add(s.Cfg.ApprovalTokTTL).Unix(), JTI: string(s.NewID())}
 			tok, err := s.Tokens.Access(claims)
 			if err != nil {
 				return err

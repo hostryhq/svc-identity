@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/hostryhq/go-common/apperr"
@@ -189,8 +190,12 @@ func (h *Handler) ListAuditEntries(w http.ResponseWriter, r *http.Request, p gen
 // ---- caution approvals and bindings ----
 
 func (h *Handler) CreateApprovalRequest(w http.ResponseWriter, r *http.Request, _ gen.CreateApprovalRequestParams) {
-	do(w, r, http.StatusCreated, func(in gen.CreateApprovalRequest) (gen.ApprovalRequest, error) {
-		return h.s.CreateApprovalRequest(r.Context(), in)
+	// request_body is hashed as the exact bytes received (no re-serialisation), so it is kept raw.
+	do(w, r, http.StatusCreated, func(in struct {
+		OperationID string          `json:"operation_id"`
+		RequestBody json.RawMessage `json:"request_body"`
+	}) (gen.ApprovalRequest, error) {
+		return h.s.CreateApprovalRequest(r.Context(), in.OperationID, in.RequestBody)
 	})
 }
 

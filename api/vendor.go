@@ -137,6 +137,10 @@ func (h *Handler) ApproveVendorApproval(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
+func (h *Handler) GetVendorApproval(w http.ResponseWriter, r *http.Request, id gen.Id, _ gen.GetVendorApprovalParams) {
+	call(w, r, http.StatusOK, func() (gen.VendorApproval, error) { return h.s.GetVendorApproval(vctx(r), id) })
+}
+
 func (h *Handler) ClaimCodeHalf(w http.ResponseWriter, r *http.Request, id gen.Id, _ gen.ClaimCodeHalfParams) {
 	call(w, r, http.StatusCreated, func() (gen.CodeHalf, error) { return h.s.ClaimCodeHalf(vctx(r), id) })
 }
