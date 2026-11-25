@@ -58,19 +58,19 @@ func TestBillingDeviceCarriesTenancySeriesInItsPack(t *testing.T) {
 	if status != 201 || act.Device.BillingCapability != gen.BillingCapabilityActive {
 		t.Fatalf("pos activation: %d %+v", status, act.Device)
 	}
-	s := act.OfflinePack.Claims.Series
+	s := packClaims(act.OfflinePack).Series
 	if len(s) != 2 || s[0].Code != "A7K" || s[0].DocType != gen.TaxInvoice || s[0].State != gen.PackSeriesStateActive || s[0].TaxRegistrationId != tenReg || s[1].Code != "A7M" || s[1].DocType != gen.CreditNote {
 		t.Fatalf("pos pack series: %+v", s)
 	}
 	// A waiter tablet gets a dormant series of its own under the same registration.
 	status, wact := e.activateAt(tok, tenOutlet, gen.Waiter, double.NewDevice(newID()))
-	ws := wact.OfflinePack.Claims.Series
+	ws := packClaims(wact.OfflinePack).Series
 	if status != 201 || len(ws) != 2 || ws[0].State != gen.PackSeriesStateDormant || ws[0].Code == "A7K" || ws[0].Code == "A7M" || ws[0].TaxRegistrationId != tenReg {
 		t.Fatalf("waiter: %d series %+v", status, ws)
 	}
 	// A kitchen display has no billing and is issued nothing.
 	status, kact := e.activateAt(tok, tenOutlet, gen.Kds, double.NewDevice(newID()))
-	if status != 201 || len(kact.OfflinePack.Claims.Series) != 0 || kact.Device.BillingCapability != gen.BillingCapabilityNone {
+	if status != 201 || len(packClaims(kact.OfflinePack).Series) != 0 || kact.Device.BillingCapability != gen.BillingCapabilityNone {
 		t.Fatalf("kds: %d %+v", status, kact.Device)
 	}
 }
@@ -79,8 +79,8 @@ func TestUnverifiedRegistrationRegistersWithoutBillingThenGetsSeries(t *testing.
 	e, tok := tenancyEnv(t, "base") // the outlet's tax registration is not verified yet
 	pos := double.NewDevice(newID())
 	status, act := e.activateAt(tok, tenOutlet, gen.Pos, pos)
-	if status != 201 || act.Device.BillingCapability != gen.BillingCapabilityNone || len(act.OfflinePack.Claims.Series) != 0 {
-		t.Fatalf("unverified: %d %+v series %+v", status, act.Device, act.OfflinePack.Claims.Series)
+	if status != 201 || act.Device.BillingCapability != gen.BillingCapabilityNone || len(packClaims(act.OfflinePack).Series) != 0 {
+		t.Fatalf("unverified: %d %+v series %+v", status, act.Device, packClaims(act.OfflinePack).Series)
 	}
 	// Staff verify the registration; the next pack fetch carries the series and the device can bill.
 	if err := e.d.Tenancy.SeedWorld(e.ctx, "registration-verified"); err != nil {
@@ -88,8 +88,8 @@ func TestUnverifiedRegistrationRegistersWithoutBillingThenGetsSeries(t *testing.
 	}
 	var pack gen.OfflinePack
 	e.mustJSON(200, "GET", "/v1/devices/"+pos.ID+"/offline-packs/latest", tok, nil, &pack)
-	if len(pack.Claims.Series) != 2 || len(pack.Claims.Series[0].Code) != 3 || pack.PackV <= act.OfflinePack.PackV {
-		t.Fatalf("pack after verification: v%d series %+v", pack.PackV, pack.Claims.Series)
+	if len(packClaims(pack).Series) != 2 || len(packClaims(pack).Series[0].Code) != 3 || pack.PackV <= act.OfflinePack.PackV {
+		t.Fatalf("pack after verification: v%d series %+v", pack.PackV, packClaims(pack).Series)
 	}
 	var d gen.Device
 	e.mustJSON(200, "GET", "/v1/devices/"+pos.ID, tok, nil, &d)
@@ -125,8 +125,8 @@ func TestTenancyOutageIsRetriedWithinTheCallAndFailsAsUnavailable(t *testing.T) 
 	}})
 	status, act := e.activateAt(tok, tenOutlet, gen.Pos, double.NewDevice(newID()))
 	remove()
-	if status != 201 || len(act.OfflinePack.Claims.Series) != 2 || hits.Load() != 2 {
-		t.Fatalf("one outage: %d hits %d series %+v", status, hits.Load(), act.OfflinePack.Claims.Series)
+	if status != 201 || len(packClaims(act.OfflinePack).Series) != 2 || hits.Load() != 2 {
+		t.Fatalf("one outage: %d hits %d series %+v", status, hits.Load(), packClaims(act.OfflinePack).Series)
 	}
 	// A longer outage answers 503.
 	remove = e.d.Tenancy.Inject(tdouble.Fault{Status: http.StatusServiceUnavailable, Match: func(r *http.Request) bool { return true }})

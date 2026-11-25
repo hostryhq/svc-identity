@@ -21,7 +21,7 @@ func TestPackCarriesEntitlementSnapshotAndRefreshesOnSubscriptionChange(t *testi
 	if status != 201 {
 		t.Fatalf("activation %d", status)
 	}
-	first := act.OfflinePack.Claims.Entitlements
+	first := packClaims(act.OfflinePack).Entitlements
 	if first == nil || first.EntitlementsV != 1 || len(first.Features) != 0 || first.PlanKey != nil {
 		t.Fatalf("no plan yet: %+v", first)
 	}
@@ -34,8 +34,8 @@ func TestPackCarriesEntitlementSnapshotAndRefreshesOnSubscriptionChange(t *testi
 	defer remove()
 	var down gen.OfflinePack
 	e.mustJSON(200, "GET", "/v1/devices/"+pos.ID+"/offline-packs/latest", tok, nil, &down)
-	if down.Claims.Entitlements == nil || down.Claims.Entitlements.EntitlementsV != 1 {
-		t.Fatalf("with tenancy down the pack carries the last snapshot: %+v", down.Claims.Entitlements)
+	if packClaims(down).Entitlements == nil || packClaims(down).Entitlements.EntitlementsV != 1 {
+		t.Fatalf("with tenancy down the pack carries the last snapshot: %+v", packClaims(down).Entitlements)
 	}
 	remove()
 
@@ -50,7 +50,7 @@ func TestPackCarriesEntitlementSnapshotAndRefreshesOnSubscriptionChange(t *testi
 	defer removeAgain()
 	var after gen.OfflinePack
 	e.mustJSON(200, "GET", "/v1/devices/"+pos.ID+"/offline-packs/latest", tok, nil, &after)
-	got := after.Claims.Entitlements
+	got := packClaims(after).Entitlements
 	if got == nil || got.EntitlementsV != 3 || got.PlanKey == nil || *got.PlanKey != "table_service" || got.Limits["outlets"] != 1 ||
 		got.OrganisationStatus != gen.EntitlementSnapshotOrganisationStatusActive || len(got.Features) != 4 || after.PackV <= down.PackV {
 		t.Fatalf("after the event: v%d %+v", after.PackV, got)

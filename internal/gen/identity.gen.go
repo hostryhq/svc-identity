@@ -412,6 +412,24 @@ func (e EntitlementSnapshotOrganisationStatus) Valid() bool {
 	}
 }
 
+// Defines values for HubPackMemberStatus.
+const (
+	HubPackMemberStatusActive    HubPackMemberStatus = "active"
+	HubPackMemberStatusSuspended HubPackMemberStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the HubPackMemberStatus enum.
+func (e HubPackMemberStatus) Valid() bool {
+	switch e {
+	case HubPackMemberStatusActive:
+		return true
+	case HubPackMemberStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationStatus.
 const (
 	InvitationStatusAccepted  InvitationStatus = "accepted"
@@ -823,6 +841,24 @@ func (e StartSupportSessionMode) Valid() bool {
 	}
 }
 
+// Defines values for StoreProtection.
+const (
+	Protected   StoreProtection = "protected"
+	Unprotected StoreProtection = "unprotected"
+)
+
+// Valid indicates whether the value is a known member of the StoreProtection enum.
+func (e StoreProtection) Valid() bool {
+	switch e {
+	case Protected:
+		return true
+	case Unprotected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SupportSessionMode.
 const (
 	SupportSessionModeView SupportSessionMode = "view"
@@ -1150,7 +1186,7 @@ type ActivateDevice struct {
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection KeyProtection `json:"key_protection"`
@@ -1172,6 +1208,11 @@ type ActivateDevice struct {
 
 	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
 	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Optional; absent means `unprotected`, which identity refuses outside HOSTRY_ENV dev, test and ci. Fixed for the life of the device id and signed into the credential (ADR-0002 A3.5 item 1).
+	//
+	// Example: protected
+	Store *StoreProtection `json:"store,omitempty"`
 }
 
 // ActivationCode An activation code; the code itself is shown once.
@@ -1699,7 +1740,7 @@ type Device struct {
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection KeyProtection `json:"key_protection"`
@@ -1733,6 +1774,11 @@ type Device struct {
 	//
 	// Example: active
 	State DeviceState `json:"state"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store *StoreProtection `json:"store,omitempty"`
 }
 
 // DeviceActivation A newly registered device with its first offline pack.
@@ -1747,7 +1793,7 @@ type DeviceActivation struct {
 	Recovery *DeviceRecovery `json:"recovery,omitempty"`
 }
 
-// DeviceCredential The identity-signed credential of a device as the offline pack carries it (ADR-0005 A3.2 row 1). `not_after` is not part of this answer; the gateway ignores it. `brand_id` is always present (ADR-0014 A3.4).
+// DeviceCredential The identity-signed credential of a device as the offline pack carries it (ADR-0005 A3.2 row 1). `not_after` is not part of this answer; the gateway ignores it. `brand_id` and `store` are always present (ADR-0014 A3.4, ADR-0002 A3.5 item 1); the gateway's cache has no expiry because both are fixed for the life of the device id.
 type DeviceCredential struct {
 	// BrandId Brand of the outlet, read from tenancy when the device was activated, stored on the device row and signed into the credential; never re-read (ADR-0014 A3.4). The gateway caches the credential with no expiry and judges a device's stream binding from it, not from a tenancy call.
 	//
@@ -1781,6 +1827,11 @@ type DeviceCredential struct {
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Recovers *Id `json:"recovers,omitempty"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store StoreProtection `json:"store"`
 
 	// TenantId Organisation.
 	//
@@ -2062,6 +2113,72 @@ type EntitlementSnapshot struct {
 // Example: active
 type EntitlementSnapshotOrganisationStatus string
 
+// HubPackClaims Payload of the signed offline pack of a device of kind `hub` (ADR-0002 A3.4 item 3). Holds its LAN credential, `pack_v`, member ids with status and permissions, the outlet's revoked device ids, the intent table version, the current and next identity keys, the gateway's op-signing key, `issued_at` and `offline_valid_until`. It never holds display names, PIN verifiers or salts, series codes or manual books, so it carries no secret and the hub may show it to a device it refuses as revoked (ADR-0005 section 4 item 2). The hub fetches it at every cloud contact with a device-key assertion (getDeviceOfflinePack) and never hands packs to devices.
+//
+// Example: {"device":{"brand_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6a","credential":"cred.jws.example","device_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f","kid":"dev-4a5f-1","kind":"hub","outlet_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61","public_key":{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"store":"protected"},"identity_public_keys":[{"alg":"ES256","crv":"P-256","kid":"k-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}],"intent_table_version":3,"issued_at":"2026-11-24T13:05:11.120Z","members":[{"member_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64","permissions":["order.create"],"status":"active"}],"offline_valid_until":"2026-12-08T13:05:11.120Z","op_signing_public_key":{"alg":"ES256","crv":"P-256","kid":"o-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"organisation_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60","pack_v":7,"revoked_device_ids":[]}
+type HubPackClaims struct {
+	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
+	Device PackDevice `json:"device"`
+
+	// IdentityPublicKeys Current and next identity public keys.
+	IdentityPublicKeys []Jwk `json:"identity_public_keys"`
+
+	// IntentTableVersion Version of the signed intent table.
+	//
+	// Example: 3
+	IntentTableVersion int `json:"intent_table_version"`
+
+	// IssuedAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	IssuedAt Timestamp `json:"issued_at"`
+
+	// Members Members allowed at the outlet, ids only.
+	Members []HubPackMember `json:"members"`
+
+	// OfflineValidUntil RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	OfflineValidUntil Timestamp `json:"offline_valid_until"`
+
+	// OpSigningPublicKey One published signing key (RFC 7517).
+	OpSigningPublicKey Jwk `json:"op_signing_public_key"`
+
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OrganisationId Id `json:"organisation_id"`
+
+	// PackV Pack version.
+	//
+	// Example: 7
+	PackV int `json:"pack_v"`
+
+	// RevokedDeviceIds Revoked device ids for the outlet.
+	RevokedDeviceIds []Id `json:"revoked_device_ids"`
+}
+
+// HubPackMember A member as a hub pack lists it, for the structural checks of ADR-0002 S8 only. No display name, PIN salt, verifier or version; a hub holds nothing a PIN guess could use.
+type HubPackMember struct {
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	MemberId Id `json:"member_id"`
+
+	// Permissions Effective permission strings at this outlet.
+	Permissions []string `json:"permissions"`
+
+	// Status Member state.
+	//
+	// Example: active
+	Status HubPackMemberStatus `json:"status"`
+}
+
+// HubPackMemberStatus Member state.
+//
+// Example: active
+type HubPackMemberStatus string
+
 // Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 //
 // Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
@@ -2136,7 +2253,7 @@ type Jwks struct {
 	Keys []Jwk `json:"keys"`
 }
 
-// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 //
 // Example: hardware
 type KeyProtection string
@@ -2245,15 +2362,15 @@ type MobileMasked = string
 
 // OfflinePack A signed offline pack. Clients verify jws and use only its payload.
 type OfflinePack struct {
-	// Claims Payload of the signed offline pack (ADR-0005 section 6, A2.6).
-	Claims OfflinePackClaims `json:"claims"`
+	// Claims OfflinePackClaims for every device kind but `hub`; HubPackClaims for a `hub` (ADR-0002 A3.4 item 3).
+	Claims OfflinePack_Claims `json:"claims"`
 
 	// IssuedAt RFC 3339 instant in UTC.
 	//
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
 
-	// Jws Compact ES256 JWS whose payload is OfflinePackClaims.
+	// Jws Compact ES256 JWS whose payload is OfflinePackClaims, or HubPackClaims for a hub.
 	//
 	// Example: pack.jws.example
 	Jws string `json:"jws"`
@@ -2269,6 +2386,11 @@ type OfflinePack struct {
 	PackV int `json:"pack_v"`
 }
 
+// OfflinePack_Claims OfflinePackClaims for every device kind but `hub`; HubPackClaims for a `hub` (ADR-0002 A3.4 item 3).
+type OfflinePack_Claims struct {
+	union json.RawMessage
+}
+
 // OfflinePackClaims Payload of the signed offline pack (ADR-0005 section 6, A2.6).
 type OfflinePackClaims struct {
 	// CatalogueVersion Permission catalogue version.
@@ -2276,36 +2398,8 @@ type OfflinePackClaims struct {
 	// Example: 1
 	CatalogueVersion int `json:"catalogue_version"`
 
-	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id` and `kind` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4).
-	Device struct {
-		// BrandId Brand of the outlet, read from tenancy at activation and fixed for the device's life (ADR-0014 A3.4).
-		//
-		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-		BrandId Id `json:"brand_id"`
-
-		// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
-		//
-		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-		DeviceId Id `json:"device_id"`
-
-		// Kid Key id of the device's own credential, the one the gateway holds for `device_id` (one key per device id for life, ADR-0002 S7). A seal, endorsement or drain statement the device makes names this `kid`.
-		//
-		// Example: dev-4a5e-1
-		Kid string `json:"kid"`
-
-		// Kind Device kind (ADR-0005 section 4).
-		//
-		// Example: pos
-		Kind DeviceKind `json:"kind"`
-
-		// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
-		//
-		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-		OutletId Id `json:"outlet_id"`
-
-		// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
-		PublicKey PublicJwk `json:"public_key"`
-	} `json:"device"`
+	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
+	Device PackDevice `json:"device"`
 
 	// Entitlements The organisation's entitlement snapshot when the pack was issued (tenancy `getEntitlements`), refreshed into a newer pack on `tenancy.subscription.changed`. Optional so an older pack still validates; an app treats an absent snapshot as "no optional feature known" and still trades (ADR-0014 T10). Never gates a sale, print or day close.
 	Entitlements *EntitlementSnapshot `json:"entitlements,omitempty"`
@@ -2498,6 +2592,47 @@ type OwnerStatusItem struct {
 type OwnerStatusList struct {
 	// Items One item per requested organisation.
 	Items []OwnerStatusItem `json:"items"`
+}
+
+// PackDevice The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
+type PackDevice struct {
+	// BrandId Brand of the outlet, read from tenancy at activation and fixed for the device's life (ADR-0014 A3.4).
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	BrandId Id `json:"brand_id"`
+
+	// Credential The LAN credential: the device's identity-signed credential as a compact JWS (ES256, header typ `hostry-cred+jws` and the identity `kid`; payload the RFC 8785 JSON of the Credential in sync/protocol-v1.md, `LAN credential`), with `not_after` = the pack's `offline_valid_until` and the `store` claim. It holds no member data, so a device may show it to any peer, and a hub may show it to a device it refuses. Re-issued with every pack.
+	//
+	// Example: cred.jws.example
+	Credential string `json:"credential"`
+
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	DeviceId Id `json:"device_id"`
+
+	// Kid Key id of the device's own credential, the one the gateway holds for `device_id` (one key per device id for life, ADR-0002 S7). A seal, endorsement or drain statement the device makes names this `kid`.
+	//
+	// Example: dev-4a5e-1
+	Kid string `json:"kid"`
+
+	// Kind Device kind (ADR-0005 section 4).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OutletId Id `json:"outlet_id"`
+
+	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
+	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store StoreProtection `json:"store"`
 }
 
 // PackGrants What one issued pack version granted to a device (ADR-0005 A3.2 row 2).
@@ -3001,7 +3136,7 @@ type Reason = string
 
 // RecordDrain Drain report from the sync gateway.
 type RecordDrain struct {
-	// DrainedThrough Sequence stored per device stream.
+	// DrainedThrough Head per device stream, copied from the statement's `streams` (the same streams, the same `seq`).
 	DrainedThrough []StreamSequence `json:"drained_through"`
 
 	// Series The last number per series, copied from the device-signed statement (ADR-0005 A3.3 item 5). Must be exactly the series identity issued to the device (422 drain.series_mismatch, vendor alert, nothing recorded). Empty only for a device that never held a series (kds, hub).
@@ -3077,7 +3212,7 @@ type RegisterDevice struct {
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection KeyProtection `json:"key_protection"`
@@ -3109,6 +3244,11 @@ type RegisterDevice struct {
 
 	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
 	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Optional; absent means `unprotected`. Fixed for the life of the device id.
+	//
+	// Example: protected
+	Store *StoreProtection `json:"store,omitempty"`
 }
 
 // RejectVendorApproval Reject or cancel an approval.
@@ -3383,6 +3523,11 @@ type StartSupportSession struct {
 //
 // Example: view
 type StartSupportSessionMode string
+
+// StoreProtection Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+//
+// Example: protected
+type StoreProtection string
 
 // StreamSequence Highest sequence of one device stream.
 type StreamSequence struct {
@@ -3848,7 +3993,7 @@ type VendorDevice struct {
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection *KeyProtection `json:"key_protection,omitempty"`
@@ -5070,6 +5215,68 @@ func (t DeviceTokenRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (t *DeviceTokenRequest) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsOfflinePackClaims returns the union data inside the OfflinePack_Claims as a OfflinePackClaims
+func (t OfflinePack_Claims) AsOfflinePackClaims() (OfflinePackClaims, error) {
+	var body OfflinePackClaims
+	err := runtime.JSONUnmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOfflinePackClaims overwrites any union data inside the OfflinePack_Claims as the provided OfflinePackClaims
+func (t *OfflinePack_Claims) FromOfflinePackClaims(v OfflinePackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	t.union = b
+	return err
+}
+
+// MergeOfflinePackClaims performs a merge with any union data inside the OfflinePack_Claims, using the provided OfflinePackClaims
+func (t *OfflinePack_Claims) MergeOfflinePackClaims(v OfflinePackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsHubPackClaims returns the union data inside the OfflinePack_Claims as a HubPackClaims
+func (t OfflinePack_Claims) AsHubPackClaims() (HubPackClaims, error) {
+	var body HubPackClaims
+	err := runtime.JSONUnmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHubPackClaims overwrites any union data inside the OfflinePack_Claims as the provided HubPackClaims
+func (t *OfflinePack_Claims) FromHubPackClaims(v HubPackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHubPackClaims performs a merge with any union data inside the OfflinePack_Claims, using the provided HubPackClaims
+func (t *OfflinePack_Claims) MergeHubPackClaims(v HubPackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t OfflinePack_Claims) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *OfflinePack_Claims) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

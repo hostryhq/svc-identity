@@ -18,18 +18,18 @@ func TestPackCarriesRegisteredManualBooks(t *testing.T) {
 	if status != 201 {
 		t.Fatalf("activation %d", status)
 	}
-	mb := act.OfflinePack.Claims.ManualBooks
+	mb := packClaims(act.OfflinePack).ManualBooks
 	if mb == nil || len(*mb) != 1 || (*mb)[0].Code != "BKB" || (*mb)[0].TaxRegistrationId != tenReg {
 		t.Fatalf("manual_books: %+v", mb)
 	}
-	for _, s := range act.OfflinePack.Claims.Series {
+	for _, s := range packClaims(act.OfflinePack).Series {
 		if s.Code == "BKB" {
 			t.Fatal("a manual book is never one of the device's own series")
 		}
 	}
 	status, kact := e.activateAt(tok, tenOutlet, gen.Kds, double.NewDevice(newID()))
-	if status != 201 || kact.OfflinePack.Claims.ManualBooks != nil {
-		t.Fatalf("kds: %d %+v", status, kact.OfflinePack.Claims.ManualBooks)
+	if status != 201 || packClaims(kact.OfflinePack).ManualBooks != nil {
+		t.Fatalf("kds: %d %+v", status, packClaims(kact.OfflinePack).ManualBooks)
 	}
 }
 
@@ -53,8 +53,8 @@ func TestPackIsStableWhileTenancyIsDown(t *testing.T) {
 				var p gen.OfflinePack
 				e.mustJSON(200, "GET", "/v1/devices/"+pos.ID+"/offline-packs/latest", tok, nil, &p)
 				n := 0
-				if p.Claims.ManualBooks != nil {
-					n = len(*p.Claims.ManualBooks)
+				if packClaims(p).ManualBooks != nil {
+					n = len(*packClaims(p).ManualBooks)
 				}
 				if p.PackV != act.OfflinePack.PackV || n != tc.wantBooks {
 					t.Fatalf("fetch %d with tenancy down: pack_v %d (was %d), %d books (want %d)", i, p.PackV, act.OfflinePack.PackV, n, tc.wantBooks)

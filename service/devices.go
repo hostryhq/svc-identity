@@ -75,7 +75,7 @@ type revocationDoc struct {
 
 func deviceDTO(d *device) gen.Device {
 	g := gen.Device{Id: d.ID, OutletId: d.OutletID, Kind: gen.DeviceKind(d.Kind), Name: d.Name, State: gen.DeviceState(d.State),
-		KeyProtection: gen.KeyProtection(d.KeyProt), BillingCapability: gen.BillingCapability(d.Billing), RegisteredAt: d.CreatedAt}
+		KeyProtection: gen.KeyProtection(d.KeyProt), Store: ptr(storeOf(d)), BillingCapability: gen.BillingCapability(d.Billing), RegisteredAt: d.CreatedAt}
 	if !d.LastSeen.IsZero() {
 		t := d.LastSeen
 		g.LastContactAt = &t
@@ -251,6 +251,9 @@ func (s *Service) checkPossession(tx repository.Tx, nonce, sig string, key crypt
 
 // ActivateDevice registers a device with an activation code (ADR-0005 section 4, way 2).
 func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, clientAddr string) (gen.DeviceActivation, error) {
+	if err := s.checkStore(in.Store); err != nil {
+		return gen.DeviceActivation{}, err
+	}
 	now := s.now()
 	key := jwkOf(in.PublicKey)
 	var refuse error
@@ -344,7 +347,7 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 				return err
 			}
 		} else {
-			dev, err = s.createDevice(ctx, tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), in.Id, key, "", ac.By, ac.ID)
+			dev, err = s.createDevice(ctx, tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), declaredStore(in.Store), in.Id, key, "", ac.By, ac.ID)
 			if err != nil {
 				return err
 			}
@@ -465,7 +468,7 @@ func (s *Service) redeemRecovery(ctx context.Context, tx repository.Tx, tenant s
 		}
 		return nil, nil, err
 	}
-	nd, err := s.createDevice(ctx, tx, tenant, old.OutletID, old.Kind, in.Name, string(in.KeyProtection), in.Id, key, old.AccountID, ac.By, ac.ID)
+	nd, err := s.createDevice(ctx, tx, tenant, old.OutletID, old.Kind, in.Name, string(in.KeyProtection), declaredStore(in.Store), in.Id, key, old.AccountID, ac.By, ac.ID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -501,9 +504,9 @@ func (s *Service) activationFor(tx repository.Tx, code string) (*activationDoc, 
 }
 
 // createDevice stores a new active device, refusing a key already bound to an active device.
-func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, outlet, kind, name, keyProt, id string, key crypto.JWK, accountID, actorID, activationID string) (*device, error) {
+func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, outlet, kind, name, keyProt, store, id string, key crypto.JWK, accountID, actorID, activationID string) (*device, error) {
 	now := s.now()
-	d := &device{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, Name: name, State: "active", KeyProt: keyProt,
+	d := &device{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, Name: name, State: "active", KeyProt: keyProt, Store: store,
 		Billing: billingFor(kind), Key: key, Thumb: crypto.Thumbprint(key), AccountID: accountID, Activation: activationID, CreatedAt: now}
 	// SR-H3: device ids are chosen by clients, so the global index is insert-only: an id that exists
 	// in any tenant and any state is refused, never overwritten or reactivated. The key is unique too.
@@ -559,6 +562,9 @@ func (s *Service) RegisterDevice(ctx context.Context, in gen.RegisterDevice) (ge
 	if err := auth.Require(ctx, "device.register", in.OutletId); err != nil {
 		return gen.Device{}, err
 	}
+	if err := s.checkStore(in.Store); err != nil {
+		return gen.Device{}, err
+	}
 	now := s.now()
 	key := jwkOf(in.PublicKey)
 	var out gen.Device
@@ -586,7 +592,7 @@ func (s *Service) RegisterDevice(ctx context.Context, in gen.RegisterDevice) (ge
 				acct = m.AccountID
 			}
 		}
-		d, err := s.createDevice(ctx, tx, p.TenantID, in.OutletId, string(in.Kind), in.Name, string(in.KeyProtection), in.Id, key, acct, p.Subject, "")
+		d, err := s.createDevice(ctx, tx, p.TenantID, in.OutletId, string(in.Kind), in.Name, string(in.KeyProtection), declaredStore(in.Store), in.Id, key, acct, p.Subject, "")
 		if err != nil {
 			return err
 		}

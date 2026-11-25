@@ -29,7 +29,7 @@ func TestActivationSignsTheBrandFromTenancyIntoCredentialAndPack(t *testing.T) {
 	for _, kind := range []gen.DeviceKind{gen.Pos, gen.Kds} {
 		dev := double.NewDevice(newID())
 		status, act := e.activateAt(tok, tenOutlet, kind, dev)
-		cd := act.OfflinePack.Claims.Device
+		cd := packClaims(act.OfflinePack).Device
 		if status != 201 || cd.BrandId != tenBrand || cd.Kid != service.DeviceKID(dev.ID) {
 			t.Fatalf("%s: %d pack device %+v", kind, status, cd)
 		}
@@ -125,11 +125,11 @@ func TestKeyLossRecoveryCodeRedeemedAtActivation(t *testing.T) {
 	if act.Recovery == nil || act.Recovery.OldDeviceId != oldDev.ID || act.Recovery.NewDeviceId != newDev.ID || act.Recovery.State != gen.DeviceRecoveryStateOpen {
 		t.Fatalf("recovery: %+v", act.Recovery)
 	}
-	if act.Device.Kind != gen.Pos || act.OfflinePack.Claims.Device.OutletId != tenOutlet || act.OfflinePack.Claims.Device.BrandId != tenBrand {
+	if act.Device.Kind != gen.Pos || packClaims(act.OfflinePack).Device.OutletId != tenOutlet || packClaims(act.OfflinePack).Device.BrandId != tenBrand {
 		t.Fatalf("new device: %+v", act.Device)
 	}
-	if len(act.OfflinePack.Claims.Series) == 0 {
-		t.Fatalf("the new device needs new series: %+v", act.OfflinePack.Claims.Series)
+	if len(packClaims(act.OfflinePack).Series) == 0 {
+		t.Fatalf("the new device needs new series: %+v", packClaims(act.OfflinePack).Series)
 	}
 	_, nc := e.credential(newDev.ID)
 	if nc.Recovers == nil || *nc.Recovers != oldDev.ID || nc.BrandId != tenBrand {

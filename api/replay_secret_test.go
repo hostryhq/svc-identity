@@ -115,8 +115,8 @@ func TestActivationReplySecretLostDeviceRecovers(t *testing.T) {
 	e.mustJSON(200, "POST", "/v1/tokens/device", "", gen.DeviceGrant{GrantType: gen.DeviceGrantGrantTypeDevice, DeviceId: dev.ID, Assertion: dev.Assert(e.d.Clock.Now(), e.jti(), service.AssertionClaims{})}, &dtok)
 	var pack gen.OfflinePack
 	e.mustJSON(200, "GET", "/v1/devices/"+dev.ID+"/offline-packs/latest", dtok.AccessToken, nil, &pack)
-	if pack.Claims.Device.DeviceId != dev.ID || pack.PackV < first.OfflinePack.PackV {
-		t.Fatalf("recovered pack: %+v", pack.Claims.Device)
+	if packClaims(pack).Device.DeviceId != dev.ID || pack.PackV < first.OfflinePack.PackV {
+		t.Fatalf("recovered pack: %+v", packClaims(pack).Device)
 	}
 
 	// 2. The same activation with a fresh key returns the pack again, and only to the same id and key.

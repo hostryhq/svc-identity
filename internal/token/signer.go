@@ -117,6 +117,12 @@ func (s *Signer) Pack(claims any) (string, error) {
 	return crypto.SignES256(s.Packer.Priv, s.Packer.Kid, "pack", claims)
 }
 
+// Credential signs a device's LAN credential with the current identity (tenant realm) key, the key a
+// pack publishes as identity_public_keys, under the header type hostry-cred+jws.
+func (s *Signer) Credential(claims any) (string, error) {
+	return crypto.SignES256(s.TenantKey.Priv, s.TenantKey.Kid, service.CredentialTyp, claims)
+}
+
 // JWKS lists the published keys of a realm: the current key and, for the tenant realm, the
 // pre-published next key.
 func (s *Signer) JWKS(vendor bool) []service.KeyInfo {

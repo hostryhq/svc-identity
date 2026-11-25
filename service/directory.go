@@ -80,7 +80,7 @@ func (s *Service) GetDeviceCredential(ctx context.Context, id string) (gen.Devic
 		if err != nil {
 			return err
 		}
-		out = gen.DeviceCredential{DeviceId: d.ID, TenantId: d.TenantID, OutletId: d.OutletID, BrandId: d.BrandID, Kind: gen.DeviceKind(d.Kind), Kid: DeviceKID(d.ID), Pub: pub}
+		out = gen.DeviceCredential{DeviceId: d.ID, TenantId: d.TenantID, OutletId: d.OutletID, BrandId: d.BrandID, Kind: gen.DeviceKind(d.Kind), Kid: DeviceKID(d.ID), Pub: pub, Store: storeOf(d)}
 		if d.Recovers != "" {
 			r := d.Recovers
 			out.Recovers = &r

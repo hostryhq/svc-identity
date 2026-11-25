@@ -97,6 +97,7 @@ type TokenIssuer interface {
 	Vendor(c auth.Claims) (string, error)   // vendor realm
 	Opaque() string                         // refresh token, 256-bit
 	Pack(claims any) (string, error)        // offline pack and wipe order JWS
+	Credential(claims any) (string, error)  // LAN credential JWS, typ hostry-cred+jws, signed with the current identity key (ADR-0002 A3.4)
 	VendorGrant(claims any) (string, error) // vendor approval grant for another service (typ vendor_approval)
 	JWKS(vendor bool) []KeyInfo             // published public keys: current and pre-published next
 }

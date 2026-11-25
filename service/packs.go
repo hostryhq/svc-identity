@@ -98,7 +98,7 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 			revoked = append(revoked, o.ID)
 		}
 	}
-	series := packSeries(d)                             // issued by tenancy (the registry is its), stored with the device
+	series := packSeries(d) // issued by tenancy (the registry is its), stored with the device
 	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
 	if err != nil {
 		return gen.OfflinePack{}, err
@@ -106,13 +106,20 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	if pv == nil {
 		pv = &packVer{}
 	}
-	books := s.manualBooks(ctx, d, pv.Books)            // entry-only paper books of the outlet, from tenancy (A1.6 item 4); last good on an outage
-	ent, err := s.packEntitlements(ctx, tx, d.TenantID) // nil until tenancy has answered once; never blocks a pack (ADR-0014 T10)
-	if err != nil {
-		return gen.OfflinePack{}, err
+	hub := d.Kind == "hub" // a hub's pack is a HubPackClaims: no names, verifiers, series, books or entitlements (ADR-0002 A3.4 item 3)
+	var books []gen.PackManualBook
+	var ent *gen.EntitlementSnapshot
+	if !hub {
+		books = s.manualBooks(ctx, d, pv.Books)                             // entry-only paper books of the outlet, from tenancy (A1.6 item 4); last good on an outage
+		if ent, err = s.packEntitlements(ctx, tx, d.TenantID); err != nil { // nil until tenancy has answered once; never blocks a pack (ADR-0014 T10)
+			return gen.OfflinePack{}, err
+		}
 	}
 	sum := sha256.New()
 	digestParts := []any{members, revoked, series, d.State, books}
+	if hub {
+		digestParts = []any{hubMembers(members), revoked, d.State}
+	}
 	if ent != nil { // appended only when present, so a pack without a snapshot keeps its earlier digest
 		digestParts = append(digestParts, ent.EntitlementsV)
 	}
@@ -143,6 +150,34 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 			return gen.OfflinePack{}, err
 		}
 	}
+	if d.BrandID == "" && s.Tenancy != nil { // a row from before ADR-0014 A3.4 that the backfill has not reached
+		return gen.OfflinePack{}, errBrandUnknown()
+	}
+	cred, err := s.credentialJWS(d, until)
+	if err != nil {
+		return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+	}
+	pd := gen.PackDevice{DeviceId: d.ID, Kind: gen.DeviceKind(d.Kind), OutletId: d.OutletID, BrandId: d.BrandID, Kid: DeviceKID(d.ID),
+		PublicKey: gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}, Store: storeOf(d), Credential: cred}
+	var idKeys []gen.Jwk
+	for _, k := range s.Tokens.JWKS(false) {
+		idKeys = append(idKeys, gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: k.Key.X, Y: k.Key.Y, Kid: k.Kid, Alg: gen.ES256, Use: gen.Sig})
+	}
+	op := s.Cfg.OpSigning
+	opKey := gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: op.X, Y: op.Y, Kid: "op-1", Alg: gen.ES256, Use: gen.Sig}
+	if hub {
+		hc := gen.HubPackClaims{Device: pd, IdentityPublicKeys: idKeys, IntentTableVersion: 1, IssuedAt: now, Members: hubMembers(members),
+			OfflineValidUntil: until, OpSigningPublicKey: opKey, OrganisationId: d.TenantID, PackV: pv.Latest, RevokedDeviceIds: revoked}
+		jws, err := s.Tokens.Pack(hc)
+		if err != nil {
+			return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+		}
+		out := gen.OfflinePack{IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}
+		if err := out.Claims.FromHubPackClaims(hc); err != nil {
+			return gen.OfflinePack{}, err
+		}
+		return out, nil
+	}
 	claims := gen.OfflinePackClaims{CatalogueVersion: CatalogueVersion, IdleLockMinutes: s.Cfg.IdleLockMinutes, IntentTableVersion: 1,
 		IssuedAt: now, Members: members, OfflineValidUntil: until, OrganisationId: d.TenantID, PackV: pv.Latest,
 		RevokedDeviceIds: revoked, Series: series}
@@ -150,22 +185,26 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 		claims.ManualBooks = &books
 	}
 	claims.Entitlements = ent
-	if d.BrandID == "" && s.Tenancy != nil { // a row from before ADR-0014 A3.4 that the backfill has not reached
-		return gen.OfflinePack{}, errBrandUnknown()
-	}
-	claims.Device.DeviceId, claims.Device.Kind, claims.Device.OutletId = d.ID, gen.DeviceKind(d.Kind), d.OutletID
-	claims.Device.BrandId, claims.Device.Kid = d.BrandID, DeviceKID(d.ID)
-	claims.Device.PublicKey = gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}
-	for _, k := range s.Tokens.JWKS(false) {
-		claims.IdentityPublicKeys = append(claims.IdentityPublicKeys, gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: k.Key.X, Y: k.Key.Y, Kid: k.Kid, Alg: gen.ES256, Use: gen.Sig})
-	}
-	op := s.Cfg.OpSigning
-	claims.OpSigningPublicKey = gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: op.X, Y: op.Y, Kid: "op-1", Alg: gen.ES256, Use: gen.Sig}
+	claims.Device, claims.IdentityPublicKeys, claims.OpSigningPublicKey = pd, idKeys, opKey
 	jws, err := s.Tokens.Pack(claims)
 	if err != nil {
 		return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
 	}
-	return gen.OfflinePack{Claims: claims, IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}, nil
+	out := gen.OfflinePack{IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}
+	if err := out.Claims.FromOfflinePackClaims(claims); err != nil {
+		return gen.OfflinePack{}, err
+	}
+	return out, nil
+}
+
+// hubMembers is the structural view a hub holds (ADR-0002 S8): id, status and permissions only. Display
+// names, PIN salts, verifiers and versions are left out, so the pack carries no secret.
+func hubMembers(ms []gen.PackMember) []gen.HubPackMember {
+	out := make([]gen.HubPackMember, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, gen.HubPackMember{MemberId: m.MemberId, Status: gen.HubPackMemberStatus(m.Status), Permissions: m.Permissions})
+	}
+	return out
 }
 
 func findK1Devices(tx repository.Tx, tenant, outlet string) ([]device, error) {

@@ -125,6 +125,7 @@ type device struct {
 	Name       string     `json:"name"`
 	State      string     `json:"state"` // active, revoked, drained, wiped, lost
 	KeyProt    string     `json:"key_protection"`
+	Store      string     `json:"store,omitempty"` // protected or unprotected, declared at activation, fixed for the life of the id (ADR-0002 A3.5); absent on a row from before it, read as unprotected
 	Billing    string     `json:"billing_capability"`
 	Key        crypto.JWK `json:"key"`
 	Thumb      string     `json:"thumb"`

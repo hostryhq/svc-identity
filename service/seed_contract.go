@@ -21,6 +21,7 @@ func (s *Service) exampleLiteral(got, want string) bool { return s.Cfg.ExampleLi
 // SeedDevice describes a device to seed.
 type SeedDevice struct {
 	ID, Outlet, Kind, Name, KeyProt, State, AccountID string
+	Store                                             string // protected (default) or unprotected
 	Key                                               crypto.JWK
 	LastSeen, DrainedAt                               time.Time
 	DrainedThrough                                    map[string]int
@@ -33,7 +34,10 @@ func (sd *Seeder) Device(ctx context.Context, tenant string, d SeedDevice) error
 		if d.State == "" {
 			d.State = "active"
 		}
-		doc := device{ID: d.ID, TenantID: tenant, OutletID: d.Outlet, Kind: d.Kind, Name: d.Name, State: d.State, KeyProt: d.KeyProt, Billing: billingFor(d.Kind),
+		if d.Store == "" {
+			d.Store = "protected"
+		}
+		doc := device{Store: d.Store, ID: d.ID, TenantID: tenant, OutletID: d.Outlet, Kind: d.Kind, Name: d.Name, State: d.State, KeyProt: d.KeyProt, Billing: billingFor(d.Kind),
 			Key: d.Key, Thumb: crypto.Thumbprint(d.Key), AccountID: d.AccountID, CreatedAt: s.now(), LastSeen: d.LastSeen, DrainedAt: d.DrainedAt}
 		for st, seq := range d.DrainedThrough {
 			doc.DrainedThr = append(doc.DrainedThr, stream{Stream: st, Seq: seq})
