@@ -43,7 +43,7 @@ var platformAuditOps = map[string]bool{
 	"listVendorUsers": true, "createVendorUser": true, "updateVendorUser": true, "resetVendorUserTotp": true,
 	"listVendorAuditEntries": true, "lookupOrganisationsByOwnerMobile": true, "endVendorSession": true,
 	"createVendorApproval": true, "listVendorApprovals": true, "getVendorApproval": true, "approveVendorApproval": true,
-	"claimCodeHalf": true, "cancelVendorApproval": true,
+	"claimCodeHalf": true, "cancelVendorApproval": true, "issueVendorApprovalGrant": true,
 	"getSupportSession": true, "renewSupportToken": true, "endSupportSession": true,
 }
 
@@ -109,6 +109,17 @@ func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	var ra *service.RetryAfterError
 	if errors.As(err, &ra) {
 		w.Header().Set("Retry-After", strconv.Itoa(int(ra.After.Seconds())+1))
+	}
+	var nx *service.NotExecutableError
+	if errors.As(err, &nx) {
+		p := apperr.ToProblem(r, err)
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(p.Status)
+		_ = json.NewEncoder(w).Encode(struct {
+			apperr.Problem
+			Reason string `json:"reason"`
+		}{p, nx.Reason})
+		return
 	}
 	apperr.WriteProblem(w, r, err)
 }

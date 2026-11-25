@@ -53,10 +53,10 @@ func TestOrphanedActivationCodeExpiresAndCanBeRevoked(t *testing.T) {
 	// The owner withdraws a fresh orphan by id before that.
 	revoked := mk("orphan-2")
 	oc := e.ownerCtx(org, owner.MemberId, grantsAll())
-	if err := e.d.Service.RevokeActivationCode(oc, revoked.Id); err != nil {
+	if _, err := e.d.Service.RevokeActivationCode(oc, revoked.Id); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	if err := e.d.Service.RevokeActivationCode(oc, revoked.Id); err != nil {
+	if _, err := e.d.Service.RevokeActivationCode(oc, revoked.Id); err != nil {
 		t.Fatalf("revoking twice is a no-op: %v", err)
 	}
 	if c := redeem(revoked.Code); c != 422 {
@@ -68,20 +68,20 @@ func TestOrphanedActivationCodeExpiresAndCanBeRevoked(t *testing.T) {
 	if c := redeem(used.Code); c != 201 {
 		t.Fatalf("redeem: %d", c)
 	}
-	if err := e.d.Service.RevokeActivationCode(oc, used.Id); err == nil {
+	if _, err := e.d.Service.RevokeActivationCode(oc, used.Id); err == nil {
 		t.Fatal("a used code must not be revoked")
 	}
 	other := e.ownerCtx(ids.ID("0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a99"), "someone", grantsAll())
 	live := mk("orphan-4")
-	if err := e.d.Service.RevokeActivationCode(other, live.Id); err == nil {
+	if _, err := e.d.Service.RevokeActivationCode(other, live.Id); err == nil {
 		t.Fatal("another organisation must not revoke the code")
 	}
-	if err := e.d.Service.RevokeActivationCode(oc, newID()); err == nil {
+	if _, err := e.d.Service.RevokeActivationCode(oc, newID()); err == nil {
 		t.Fatal("an unknown id must be refused")
 	}
 	// A member without the create permission for the outlet cannot withdraw it either.
 	weak := e.ownerCtx(org, "staff", authtest.Grants([]string{outletA}, "member.read"))
-	if err := e.d.Service.RevokeActivationCode(weak, live.Id); err == nil {
+	if _, err := e.d.Service.RevokeActivationCode(weak, live.Id); err == nil {
 		t.Fatal("a member without device.activation_code.create must not revoke")
 	}
 	if c := redeem(live.Code); c != 201 {
@@ -130,7 +130,7 @@ func TestActivationReplySecretLostDeviceRecovers(t *testing.T) {
 	e.mustJSON(201, "POST", "/v1/device-nonces", "", nil, &n2)
 	bad := req
 	bad.PublicKey, bad.Nonce, bad.NonceSignature = pub(stranger), n2.Nonce, stranger.SignNonce(n2.Nonce)
-	if c, _, _ := e.do("POST", "/v1/device-activations", "", bad); c != 422 {
+	if c, _, _ := e.do("POST", "/v1/device-activations", "", bad); c != 409 {
 		t.Fatalf("the same id with another key must be refused: %d", c)
 	}
 

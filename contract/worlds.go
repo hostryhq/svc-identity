@@ -26,7 +26,7 @@ func (w *World) SeedWorld(ctx context.Context, name string) error {
 	switch name {
 	case "base", "otp-challenge-pending", "session-open", "device-revoked", "device-drained", "pin-reset-authorised", "pin-locked", "co-owner",
 		"approval-pending", "approval-approved", "owner-recovery-pending", "vendor-session-active", "support-session-active",
-		"vendor-approval-pending", "vendor-approval-approved", "device-unregistered", "org-no-owner", "owner-invited", "vendor-setup-pending":
+		"vendor-approval-pending", "vendor-approval-approved", "vendor-grant-approved", "activation-code-pending", "device-unregistered", "org-no-owner", "owner-invited", "vendor-setup-pending":
 	default:
 		return fmt.Errorf("contract: example world %q is not implemented", name)
 	}
@@ -154,7 +154,7 @@ func (w *World) seedVendor(ctx context.Context, sd *service.Seeder, priyaSetup b
 func (w *World) delta(ctx context.Context, sd *service.Seeder, name string) error {
 	switch name {
 	case "device-unregistered":
-		return sd.Activation(ctx, Org, Activ, "7QK3M9XD", Outlet, "pos")
+		return sd.Activation(ctx, Org, Activ, "7QK3M9XD", Outlet, "pos", Asha)
 	case "otp-challenge-pending":
 		return sd.Challenge(ctx, Chall, AshaMobile, DeviceID, ExampleKey, "482915")
 	case "session-open":
@@ -202,7 +202,7 @@ func (w *World) delta(ctx context.Context, sd *service.Seeder, name string) erro
 			return sd.ApproveRequest(ctx, Org, ApprReq, Asha)
 		}
 	case "owner-recovery-pending":
-		return sd.VendorApproval(ctx, service.SeedApproval{ID: CoOwner, Kind: "owner_recovery", Requester: Vendor, Approver: Vendor2, Org: Org, Mobile: AshaMobile,
+		return sd.VendorApproval(ctx, service.SeedApproval{ID: Recovery, Kind: "owner_recovery", Requester: Vendor, Approver: Vendor2, Org: Org, Mobile: AshaMobile,
 			NewMobile: "+919876500099", State: "approved", CompletesAt: w.D.Clock.Now().Add(23 * time.Hour)})
 	case "owner-invited":
 		return sd.OwnerInvitationWithID(ctx, Invite, Org, AshaMobile, "Asha")
@@ -210,6 +210,11 @@ func (w *World) delta(ctx context.Context, sd *service.Seeder, name string) erro
 		return sd.VendorSessionRec(ctx, "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a7b", Vendor, "renew_example")
 	case "support-session-active":
 		return sd.SupportSession(ctx, service.SeedSupport{ID: Support, UserID: Vendor, Org: Org, Ticket: "SUP-2041"})
+	case "activation-code-pending":
+		return sd.Activation(ctx, Org, Activ, "7QK3M9XD", Outlet, "pos", Asha)
+	case "vendor-grant-approved":
+		// An organisation suspension Priya requested and Arun approved; the grant it yielded has lapsed or was refused.
+		return sd.VendorApproval(ctx, service.SeedApproval{ID: Appr, Kind: "org_suspend", Requester: Vendor, Approver: Vendor2, Org: Org, State: "approved", Lifetime: 24 * time.Hour})
 	case "vendor-approval-pending", "vendor-approval-approved":
 		state, approver := "pending", ""
 		if name == "vendor-approval-approved" {

@@ -40,6 +40,7 @@ const (
 	AshaCash  = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8b" // Asha's assignment of the Cashier role
 	RaviCash  = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a9f"
 	CoOwner   = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a8d"
+	Recovery  = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a99" // owner recovery (the vendor approval id)
 	BindingX  = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6e" // the device binding under caution
 	BindingO  = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c" // the caller's own binding, not under caution
 	DeviceO   = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a7a" // the device of that binding
@@ -100,6 +101,12 @@ var specGaps = map[string]specGap{
 	"deleteRoleAssignment": {ExtraOwner: true},
 	// the example patches Priya, who is the caller: a vendor user cannot deactivate herself
 	"updateVendorUser": {VendorUser: Vendor2},
+	// the base world holds no activation code, and the spec names code 4a75 in these examples
+	"listActivationCodes":  {World: "activation-code-pending"},
+	"revokeActivationCode": {World: "activation-code-pending"},
+	// the world named (vendor-approval-approved) is a sign-in code approved by Arun with Priya as caller; the
+	// operation needs a grant kind and its approver as the caller, so run on an approved org_suspend as Arun
+	"issueVendorApprovalGrant": {World: "vendor-grant-approved", VendorUser: Vendor2},
 }
 
 // Header returns the request headers of a caller class for the world being exercised. Classes:

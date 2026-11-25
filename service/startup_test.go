@@ -57,8 +57,10 @@ func TestCatalogueLints(t *testing.T) {
 		if p.StrongOnly && !p.OwnerGrant {
 			t.Errorf("%s is strong_only but not owner_grant", p.Name)
 		}
-		if p.SupportActable {
-			t.Errorf("%s is support_actable but no permission carries it in Phase 1", p.Name)
+		// Phase 2 catalogue: only these two carry support_actable (act mode stays off until the security
+		// review signs, ADR-0005 A2.5 item 5); a third is a catalogue change to be reviewed.
+		if p.SupportActable && p.Name != "catalog.import" && p.Name != "sync.quarantine.confirm" {
+			t.Errorf("%s is support_actable but is not one of the two act-mode permissions", p.Name)
 		}
 	}
 }

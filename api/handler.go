@@ -73,6 +73,22 @@ func (h *Handler) GetVendorJwks(w http.ResponseWriter, r *http.Request) {
 
 // ---- devices ----
 
+func (h *Handler) ListActivationCodes(w http.ResponseWriter, r *http.Request, p gen.ListActivationCodesParams) {
+	call(w, r, http.StatusOK, func() (gen.ActivationCodePage, error) { return h.s.ListActivationCodes(r.Context(), p) })
+}
+
+func (h *Handler) RevokeActivationCode(w http.ResponseWriter, r *http.Request, activationCodeId gen.Id, _ gen.RevokeActivationCodeParams) {
+	call(w, r, http.StatusOK, func() (gen.ActivationCodeSummary, error) {
+		return h.s.RevokeActivationCode(r.Context(), activationCodeId)
+	})
+}
+
+func (h *Handler) IssueVendorApprovalGrant(w http.ResponseWriter, r *http.Request, approvalId gen.Id, _ gen.IssueVendorApprovalGrantParams) {
+	call(w, r, http.StatusCreated, func() (gen.VendorApprovalGrant, error) {
+		return h.s.IssueVendorApprovalGrant(r.Context(), approvalId)
+	})
+}
+
 func (h *Handler) CreateActivationCode(w http.ResponseWriter, r *http.Request, _ gen.CreateActivationCodeParams) {
 	do(w, r, http.StatusCreated, func(in gen.CreateActivationCode) (gen.ActivationCode, error) {
 		return h.s.CreateActivationCode(r.Context(), in)

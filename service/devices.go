@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	auth "github.com/hostryhq/go-auth"
@@ -28,6 +29,36 @@ type activationDoc struct {
 	UsedKey  string    `json:"used_key,omitempty"`
 	Key      string    `json:"key,omitempty"` // storage key (MAC of the code), so the owner can withdraw it by id
 	Revoked  bool      `json:"revoked,omitempty"`
+	// Created is when the code was made (absent on codes written before the list existed: the expiry
+	// less the activation lifetime stands in).
+	Created time.Time `json:"created,omitempty"`
+}
+
+// store writes the code under its storage key, indexed by id (K1) and by organisation (K2) so the
+// owner can list the organisation's codes.
+func (ac *activationDoc) store(tx repository.Tx, key string) error {
+	return put(tx, kActivation, repository.Global, key, ac, keys{k1: ac.ID, k2: ac.TenantID})
+}
+
+// state is pending (can still be redeemed), revoked, redeemed or lapsed.
+func (ac *activationDoc) state(now time.Time) gen.ActivationCodeSummaryState {
+	switch {
+	case ac.UsedBy != "":
+		return gen.ActivationCodeSummaryStateRedeemed
+	case ac.Revoked:
+		return gen.ActivationCodeSummaryStateRevoked
+	case !now.Before(ac.Expires):
+		return gen.ActivationCodeSummaryStateLapsed
+	}
+	return gen.ActivationCodeSummaryStatePending
+}
+
+func (s *Service) activationSummary(ac *activationDoc, now time.Time) gen.ActivationCodeSummary {
+	created := ac.Created
+	if created.IsZero() {
+		created = ac.Expires.Add(-s.Cfg.ActivationTTL)
+	}
+	return gen.ActivationCodeSummary{Id: ac.ID, OutletId: ac.OutletID, Kind: gen.DeviceKind(ac.Kind), State: ac.state(now), CreatedBy: ac.By, CreatedAt: created, ExpiresAt: ac.Expires}
 }
 
 type revocationDoc struct {
@@ -83,9 +114,9 @@ func (s *Service) CreateActivationCode(ctx context.Context, in gen.CreateActivat
 	now := s.now()
 	code := s.Rand.Alphabet(8, crypto.CodeAlphabet)
 	cid := crypto.MAC(s.Cfg.MACKey, "activation", code)
-	doc := activationDoc{ID: string(s.NewID()), Key: cid, TenantID: p.TenantID, OutletID: in.OutletId, Kind: string(in.Kind), By: p.Subject, Expires: now.Add(s.Cfg.ActivationTTL)}
+	doc := activationDoc{ID: string(s.NewID()), Key: cid, TenantID: p.TenantID, OutletID: in.OutletId, Kind: string(in.Kind), By: p.Subject, Expires: now.Add(s.Cfg.ActivationTTL), Created: now}
 	err := s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
-		if err := put(tx, kActivation, repository.Global, cid, doc, keys{k1: doc.ID}); err != nil {
+		if err := doc.store(tx, cid); err != nil {
 			return err
 		}
 		return s.audit(tx, p.TenantID, auditDoc{Action: "device.activation_code.created", ActorKind: "member", ActorLbl: p.Subject, Outcome: "succeeded", Target: in.OutletId, Device: p.DeviceID})
@@ -93,20 +124,19 @@ func (s *Service) CreateActivationCode(ctx context.Context, in gen.CreateActivat
 	return gen.ActivationCode{Id: doc.ID, Code: code, OutletId: in.OutletId, Kind: in.Kind, ExpiresAt: doc.Expires}, err
 }
 
-// RevokeActivationCode withdraws an unused activation code of the caller's organisation, for a code
+// RevokeActivationCode withdraws an unredeemed activation code of the caller's organisation, for a code
 // whose reply was lost (idempotency.replay_secret: the code is not stored, so nobody holds it and it
 // would stay live for its 10 minutes). The holder of device.activation_code.create for the code's
-// outlet may do it. A code already redeemed is refused (revoke the device instead); revoking twice
-// is a no-op. Another organisation's code, or an unknown id, is 404.
-//
-// No route carries this yet: the contract has no list or revoke operation for activation codes (spec
-// request in the Phase 2 report). The service operation exists so the route is only wiring.
-func (s *Service) RevokeActivationCode(ctx context.Context, id string) error {
+// outlet may do it. A code already redeemed is 409 activation_code_redeemed (revoke the device
+// instead); revoking a code that is already revoked or has lapsed answers the code and changes
+// nothing. Another organisation's code, or an unknown id, is 404.
+func (s *Service) RevokeActivationCode(ctx context.Context, id string) (gen.ActivationCodeSummary, error) {
 	p, ok := principal(ctx)
 	if !ok {
-		return errUnauth()
+		return gen.ActivationCodeSummary{}, errUnauth()
 	}
-	return s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
+	var out gen.ActivationCodeSummary
+	err := s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
 		docs, err := find[activationDoc](tx, kActivation, repository.Global, id)
 		if err != nil {
 			return err
@@ -118,18 +148,68 @@ func (s *Service) RevokeActivationCode(ctx context.Context, id string) error {
 		if err := auth.Require(ctx, "device.activation_code.create", ac.OutletID); err != nil {
 			return err
 		}
-		if ac.UsedBy != "" {
-			return apperr.New(apperr.Conflict, "activation_code_used", "the activation code was already used; revoke the device instead")
+		now := s.now()
+		switch ac.state(now) {
+		case gen.ActivationCodeSummaryStateRedeemed:
+			return apperr.New(apperr.Conflict, "activation_code_redeemed", "the activation code was already redeemed; revoke the device instead")
+		case gen.ActivationCodeSummaryStatePending:
+			ac.Revoked = true
+			if err := ac.store(tx, ac.Key); err != nil {
+				return err
+			}
+			if err := s.audit(tx, p.TenantID, auditDoc{Action: "device.activation_code.revoked", ActorKind: "member", ActorLbl: p.Subject, Outcome: "succeeded", Target: ac.OutletID, Device: p.DeviceID}); err != nil {
+				return err
+			}
 		}
-		if ac.Revoked {
-			return nil
-		}
-		ac.Revoked, ac.Expires = true, s.now()
-		if err := put(tx, kActivation, repository.Global, ac.Key, ac, keys{k1: ac.ID}); err != nil {
+		out = s.activationSummary(&ac, now)
+		return nil
+	})
+	return out, err
+}
+
+// ListActivationCodes lists the organisation's codes that can still be redeemed, newest first, in the
+// caller's outlet scope. The code itself is never returned. A code lapses with its 10 minutes and
+// then leaves the list.
+func (s *Service) ListActivationCodes(ctx context.Context, p gen.ListActivationCodesParams) (gen.ActivationCodePage, error) {
+	pr, ok := principal(ctx)
+	if !ok {
+		return gen.ActivationCodePage{}, errUnauth()
+	}
+	scope, err := auth.ScopeFor(ctx, "device.activation_code.create")
+	if err != nil {
+		return gen.ActivationCodePage{}, err
+	}
+	limit := pageLimit(p.Limit, 50, 200)
+	out := gen.ActivationCodePage{Items: []gen.ActivationCodeSummary{}}
+	err = s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
+		all, err := findK2[activationDoc](tx, kActivation, repository.Global, pr.TenantID)
+		if err != nil {
 			return err
 		}
-		return s.audit(tx, p.TenantID, auditDoc{Action: "device.activation_code.revoked", ActorKind: "member", ActorLbl: p.Subject, Outcome: "succeeded", Target: ac.OutletID, Device: p.DeviceID})
+		now := s.now()
+		var live []activationDoc
+		for i := range all {
+			if all[i].TenantID == pr.TenantID && all[i].state(now) == gen.ActivationCodeSummaryStatePending && scope.Contains(all[i].OutletID) {
+				live = append(live, all[i])
+			}
+		}
+		// ids are time-sortable, so newest first is descending id; the cursor is the last id returned.
+		sort.Slice(live, func(i, j int) bool { return live[i].ID > live[j].ID })
+		after := deref(p.Cursor)
+		for i := range live {
+			if after != "" && live[i].ID >= after {
+				continue
+			}
+			if len(out.Items) == limit {
+				c := out.Items[len(out.Items)-1].Id
+				out.NextCursor = &c
+				break
+			}
+			out.Items = append(out.Items, s.activationSummary(&live[i], now))
+		}
+		return nil
 	})
+	return out, err
 }
 
 // errDeviceUnavailable is the neutral refusal for a device id that already exists in any tenant or
@@ -201,9 +281,13 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 				tenant = ac.TenantID
 				return nil
 			}
-			return fail()
+			// A redeemed code presented by another device or key: 409, so a device that lost its reply can tell
+			// "already redeemed" from "wrong code"; it still counts against the attempt limit.
+			lim.Times = append(lim.Times, now)
+			refuse = apperr.New(apperr.Conflict, "activation_code_redeemed", "the activation code was already redeemed")
+			return s.limitPut(tx, "actfail:ip:"+clientAddr, lim)
 		}
-		if !now.Before(ac.Expires) {
+		if ac.Revoked || !now.Before(ac.Expires) {
 			return fail()
 		}
 		if err := s.checkPossession(tx, in.Nonce, in.NonceSignature, key, now); err != nil {
@@ -225,7 +309,7 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 		}
 		ac.UsedBy, ac.UsedKey = in.Id, thumb
 		tenant = ac.TenantID
-		return put(tx, kActivation, repository.Global, cid, ac, keys{k1: ac.ID})
+		return ac.store(tx, cid)
 	})
 	if err != nil {
 		return gen.DeviceActivation{}, err

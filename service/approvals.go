@@ -114,7 +114,7 @@ func claimBodyHash(field string) string {
 }
 
 func approvalDTO(r *approvalReq, now time.Time, showToken bool) gen.ApprovalRequest {
-	g := gen.ApprovalRequest{Id: r.ID, OperationId: r.Operation, BodyHash: r.BodyHash, Subject: strp(r.Subject), RequestMethod: strp(r.Method), RequestPath: strp(r.Path), CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, State: gen.ApprovalRequestState(r.effective(now))}
+	g := gen.ApprovalRequest{Id: r.ID, OperationId: r.Operation, BodyHash: r.BodyHash, Subject: r.Subject, RequestMethod: gen.ApprovalRequestRequestMethod(r.Method), RequestPath: r.Path, TargetHash: strp("sha256:" + auth.TargetHash(r.Method, r.Path, strings.TrimPrefix(r.BodyHash, "sha256:"))), CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, State: gen.ApprovalRequestState(r.effective(now))}
 	if showToken && r.Token != "" {
 		t := r.Token
 		g.ApprovalToken = &t

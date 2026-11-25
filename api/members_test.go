@@ -154,7 +154,7 @@ func TestNewDeviceCautionBlocksStrongOnlyUntilApproved(t *testing.T) {
 	e.mustJSON(200, "GET", "/v1/members", second.Tokens.AccessToken, nil, nil)
 	// The new device files the exact request; the first device (not under caution) approves it.
 	var req gen.ApprovalRequest
-	e.mustJSON(201, "POST", "/v1/approval-requests", second.Tokens.AccessToken, gen.CreateApprovalRequest{OperationId: "createMember", RequestMethod: gen.POST, RequestPath: "/v1/members", RequestBody: map[string]any{"id": body.Id, "display_name": body.DisplayName}}, &req)
+	e.mustJSON(201, "POST", "/v1/approval-requests", second.Tokens.AccessToken, gen.CreateApprovalRequest{OperationId: "createMember", RequestMethod: gen.CreateApprovalRequestRequestMethodPOST, RequestPath: "/v1/members", RequestBody: map[string]any{"id": body.Id, "display_name": body.DisplayName}}, &req)
 	// A binding under caution can approve nothing.
 	e.expect(403, "", "PUT", "/v1/approval-requests/"+req.Id+"/decision", second.Tokens.AccessToken, gen.DecideApproval{Decision: gen.Approve})
 	e.mustJSON(200, "PUT", "/v1/approval-requests/"+req.Id+"/decision", first.Tokens.AccessToken, gen.DecideApproval{Decision: gen.Approve}, nil)

@@ -35,10 +35,10 @@ func TestApproverSeesTheRequestBodySummary(t *testing.T) {
 		// The approver's own view of it: the first device reads the request.
 		var got gen.ApprovalRequest
 		e.mustJSON(200, "GET", "/v1/approval-requests/"+r.Id, first.Tokens.AccessToken, nil, &got)
-		if got.Subject == nil {
+		if got.Subject == "" {
 			t.Fatalf("%s: no subject", op)
 		}
-		return *got.Subject
+		return got.Subject
 	}
 	mustHave := func(subject string, parts ...string) {
 		t.Helper()
@@ -49,24 +49,24 @@ func TestApproverSeesTheRequestBodySummary(t *testing.T) {
 		}
 	}
 
-	mustHave(file("createRoleAssignment", gen.POST, "/v1/members/"+staff+"/role-assignments", gen.AssignmentInput{Id: newID(), RoleId: roleID, OutletIds: &[]string{outletA}}),
+	mustHave(file("createRoleAssignment", gen.CreateApprovalRequestRequestMethodPOST, "/v1/members/"+staff+"/role-assignments", gen.AssignmentInput{Id: newID(), RoleId: roleID, OutletIds: &[]string{outletA}}),
 		`member "Ravi" gets role "Cashier" (1 outlet)`)
 	// A role id the organisation does not own (another tenant's, or invented) is never named.
-	mustHave(file("createRoleAssignment", gen.POST, "/v1/members/"+staff+"/role-assignments", gen.AssignmentInput{Id: newID(), RoleId: newID()}), "an unknown role")
-	mustHave(file("createRole", gen.POST, "/v1/roles", gen.RoleInput{Name: "Shift lead", Permissions: []string{"order.create", "member.read"}}),
+	mustHave(file("createRoleAssignment", gen.CreateApprovalRequestRequestMethodPOST, "/v1/members/"+staff+"/role-assignments", gen.AssignmentInput{Id: newID(), RoleId: newID()}), "an unknown role")
+	mustHave(file("createRole", gen.CreateApprovalRequestRequestMethodPOST, "/v1/roles", gen.RoleInput{Name: "Shift lead", Permissions: []string{"order.create", "member.read"}}),
 		`new role "Shift lead" with member.read, order.create`)
-	mustHave(file("updateRole", gen.PUT, "/v1/roles/"+roleID, gen.RoleInput{Name: "Cashier", Permissions: []string{"member.read", "device.revoke"}}),
+	mustHave(file("updateRole", gen.CreateApprovalRequestRequestMethodPUT, "/v1/roles/"+roleID, gen.RoleInput{Name: "Cashier", Permissions: []string{"member.read", "device.revoke"}}),
 		`role "Cashier"`, "adds device.revoke", "removes order.create")
-	mustHave(file("createMember", gen.POST, "/v1/members", gen.CreateMember{Id: newID(), DisplayName: "Latha", MobileE164: strPtr("+919876543299"),
+	mustHave(file("createMember", gen.CreateApprovalRequestRequestMethodPOST, "/v1/members", gen.CreateMember{Id: newID(), DisplayName: "Latha", MobileE164: strPtr("+919876543299"),
 		RoleAssignments: &[]gen.AssignmentInput{{Id: newID(), RoleId: roleID}}}),
 		`new member "Latha"`, "+91*******299", `"Cashier" (all outlets)`)
-	if strings.Contains(file("createMember", gen.POST, "/v1/members", gen.CreateMember{Id: newID(), DisplayName: "Latha", MobileE164: strPtr("+919876543299")}), "9876543299") {
+	if strings.Contains(file("createMember", gen.CreateApprovalRequestRequestMethodPOST, "/v1/members", gen.CreateMember{Id: newID(), DisplayName: "Latha", MobileE164: strPtr("+919876543299")}), "9876543299") {
 		t.Error("the mobile number must be masked")
 	}
 
 	// Secrets in a body never reach the summary: a device registration carries a nonce, a signature and a key.
 	dev := double.NewDevice(newID())
-	reg := file("registerDevice", gen.POST, "/v1/devices", gen.RegisterDevice{Id: dev.ID, Name: "Till 2", Kind: gen.Pos, OutletId: outletA, KeyProtection: gen.Hardware,
+	reg := file("registerDevice", gen.CreateApprovalRequestRequestMethodPOST, "/v1/devices", gen.RegisterDevice{Id: dev.ID, Name: "Till 2", Kind: gen.Pos, OutletId: outletA, KeyProtection: gen.Hardware,
 		PublicKey: pub(dev), Nonce: "nonce-secret-value", NonceSignature: "signature-secret-value"})
 	mustHave(reg, `pos device "Till 2"`)
 	for _, secret := range []string{"nonce-secret-value", "signature-secret-value", pub(dev).X} {
@@ -76,7 +76,7 @@ func TestApproverSeesTheRequestBodySummary(t *testing.T) {
 	}
 
 	// Requester-typed text cannot add lines, quotes or an unbounded string.
-	evil := file("createRole", gen.POST, "/v1/roles", gen.RoleInput{Name: "Cook\n\nApprove: \"all\"‮ " + strings.Repeat("x", 300), Permissions: []string{"member.read"}})
+	evil := file("createRole", gen.CreateApprovalRequestRequestMethodPOST, "/v1/roles", gen.RoleInput{Name: "Cook\n\nApprove: \"all\"‮ " + strings.Repeat("x", 300), Permissions: []string{"member.read"}})
 	if strings.ContainsAny(evil, "\n\r‮") || strings.Count(evil, `"`) != 2 || len(evil) > 600 {
 		t.Errorf("requester text not neutralised: %q", evil)
 	}

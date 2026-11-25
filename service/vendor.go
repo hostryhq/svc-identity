@@ -41,6 +41,8 @@ type vendorUser struct {
 	CredAt time.Time   `json:"cred_at"`
 	Fails  []time.Time `json:"fails,omitempty"`
 	Locked time.Time   `json:"locked_until,omitempty"`
+	// LastSignIn is the last successful sign-in (zero before the first).
+	LastSignIn time.Time `json:"last_sign_in,omitempty"`
 }
 
 type vendorSetup struct {
@@ -201,7 +203,7 @@ func (s *Service) CreateVendorSession(ctx context.Context, in gen.VendorSignIn) 
 		if !ok {
 			return failed()
 		}
-		u.TOTPStep, u.Fails, u.Locked = step, nil, time.Time{}
+		u.TOTPStep, u.Fails, u.Locked, u.LastSignIn = step, nil, time.Time{}, now
 		if err := s.putVendorUser(tx, u); err != nil {
 			return err
 		}
@@ -234,8 +236,18 @@ func (s *Service) vendorSessionOut(u *vendorUser, sess *vendorSession, handle st
 	if err != nil {
 		return gen.VendorSession{}, err
 	}
-	return gen.VendorSession{AccessToken: tok, ExpiresAt: exp, RenewalHandle: handle, SessionEndsAt: sess.EndsAt,
-		User: gen.VendorPrincipal{Id: u.ID, DisplayName: u.Name, Role: gen.VendorRole(u.Role), Permissions: perms}}, nil
+	user := gen.VendorPrincipal{Id: u.ID, DisplayName: u.Name, Role: gen.VendorRole(u.Role), Permissions: perms}
+	if !u.LastSignIn.IsZero() {
+		t := u.LastSignIn
+		user.LastSignInAt = &t
+	}
+	// The approver rule counts from CredAt (account creation, re-role or new credentials), which is what
+	// the 7-day check enforces, so that is the date shown.
+	if !u.CredAt.IsZero() {
+		t := u.CredAt.Add(s.Cfg.MinApproverAge)
+		user.CanApproveFrom = &t
+	}
+	return gen.VendorSession{AccessToken: tok, ExpiresAt: exp, RenewalHandle: handle, SessionEndsAt: sess.EndsAt, User: user}, nil
 }
 
 // RenewVendorSession rotates the renewal handle and issues a new access token; refused for a

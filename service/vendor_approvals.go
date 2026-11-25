@@ -43,6 +43,10 @@ type vendorApproval struct {
 	RuleSetID   string `json:"rule_set_id,omitempty"`
 	RuleSetHash string `json:"rule_set_content_hash,omitempty"`
 	Effective   string `json:"effective_date,omitempty"`
+	// OwnerExportOffered (org_close): the requester confirmed the owner was offered an export (BR-A1-72).
+	OwnerExportOffered bool `json:"owner_export_offered,omitempty"`
+	// GrantJTI is the jti of the most recent grant issued for the approval (the live one).
+	GrantJTI string `json:"grant_jti,omitempty"`
 }
 
 // grantKind reports whether the approval kind is executed by another service with a vendor approval
@@ -102,6 +106,28 @@ func (a *vendorApproval) subjectHash() string {
 	return GrantSubjectHash(a.Kind, a.Org, a.RuleSetID, a.RuleSetHash, a.Effective)
 }
 
+// statement is the human-readable subject of the approval, built from the stored fields only (never
+// from requester text), for the approver to read.
+func (a *vendorApproval) statement() string {
+	switch a.Kind {
+	case "org_suspend":
+		return "Suspend organisation " + a.Org
+	case "org_reinstate":
+		return "Reinstate organisation " + a.Org
+	case "org_close":
+		return "Close organisation " + a.Org
+	case "tax_rule_set_publish":
+		return "Publish tax rule set " + a.RuleSetID + " effective " + a.Effective
+	case "device_revoke_over_quota":
+		return "Revoke device " + a.Subject + " of organisation " + a.Org
+	case "sign_in_code":
+		return "Issue a sign-in code for " + maskMobile(a.Mobile)
+	case "owner_recovery":
+		return "Move owner access of organisation " + a.Org + " from " + maskMobile(a.Mobile) + " to " + maskMobile(a.NewMobile)
+	}
+	return ""
+}
+
 func (a *vendorApproval) effective(now time.Time) string {
 	if (a.State == "pending" || (a.State == "approved" && grantKind(a.Kind))) && !now.Before(a.ExpiresAt) {
 		return "expired"
@@ -115,6 +141,21 @@ func approvalDTOV(a *vendorApproval, now time.Time) gen.VendorApproval {
 	if a.Org != "" {
 		x := a.Org
 		g.OrganisationId = &x
+	}
+	if a.Reason != "" {
+		r := a.Reason
+		g.Reason = &r
+	}
+	if sub := a.statement(); sub != "" {
+		g.Subject = &sub
+	}
+	if a.Kind == "tax_rule_set_publish" && a.RuleSetID != "" {
+		x := a.RuleSetID
+		g.RuleSetId = &x
+	}
+	if a.Kind == "org_close" {
+		x := a.OwnerExportOffered
+		g.OwnerExportOffered = &x
 	}
 	if a.Approver != "" {
 		x := a.Approver
@@ -226,6 +267,7 @@ func (s *Service) CreateVendorApproval(ctx context.Context, in gen.CreateVendorA
 		switch kind {
 		case "org_suspend", "org_reinstate", "org_close":
 			// the executing service (tenancy) checks the organisation's state; nothing more is stored here
+			a.OwnerExportOffered = kind == "org_close" && in.OwnerExportOffered != nil && *in.OwnerExportOffered
 		case "tax_rule_set_publish":
 			a.RuleSetID, a.RuleSetHash, a.Effective = *in.RuleSetId, *in.RuleSetContentHash, in.EffectiveDate.Format("2006-01-02")
 		case "sign_in_code":
@@ -462,10 +504,82 @@ func (s *Service) vendorGrant(a *vendorApproval, now time.Time) (gen.VendorAppro
 	if a.Kind == "tax_rule_set_publish" {
 		org = PlatformOrg
 	}
+	jti := string(s.NewID())
+	a.GrantJTI = jti
 	tok, err := s.Tokens.VendorGrant(auth.GrantClaims{Issuer: GrantIssuer, Realm: auth.RealmVendor, Audience: grantAudience(a.Kind), Type: auth.GrantType,
-		JTI: string(s.NewID()), ApprovalID: a.ID, Kind: a.Kind, Org: org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(),
+		JTI: jti, ApprovalID: a.ID, Kind: a.Kind, Org: org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(),
 		IssuedAt: now.Unix(), ExpiresAt: exp.Unix()})
 	return gen.VendorApprovalGrant{Token: tok, ExpiresAt: exp}, err
+}
+
+// NotExecutableError is 409 approval_not_executable with the refining reason (not_approved, lapsed,
+// executed, not_approver or not_grantable); the api layer adds reason to the problem body.
+type NotExecutableError struct{ Reason string }
+
+// Error implements error.
+func (e *NotExecutableError) Error() string { return "approval not executable: " + e.Reason }
+
+// Unwrap lets the generic problem mapping see a 409 with the stable code.
+func (e *NotExecutableError) Unwrap() error {
+	return apperr.New(apperr.Conflict, "approval_not_executable", "the approval cannot be executed")
+}
+
+func notExecutable(reason string) error { return &NotExecutableError{Reason: reason} }
+
+// IssueVendorApprovalGrant issues a fresh single-use grant for an approval that is still approved, for
+// when the executing service refused the first grant or it lapsed unused (ADR-0014 A2.5 item 4). Only
+// the approver of the record may ask, while still holding the kind's approve permission and still
+// eligible. The subject hash is recomputed from the stored fields. The issue is audited with the
+// approval id and the new jti; the previous grant's jti is replaced as the live one.
+func (s *Service) IssueVendorApprovalGrant(ctx context.Context, id string) (gen.VendorApprovalGrant, error) {
+	pr, err := s.vendorPrincipal(ctx)
+	if err != nil {
+		return gen.VendorApprovalGrant{}, err
+	}
+	var out gen.VendorApprovalGrant
+	err = s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		a, err := get[vendorApproval](tx, kVendorAppr, repository.Global, id)
+		if err != nil || a == nil {
+			return notFoundOr(err)
+		}
+		_, ap := kindPerms(a.Kind)
+		if !s.holdsVendorPerm(ctx, ap) {
+			return s.approvalDenied()
+		}
+		auth.SetAuditTarget(ctx, a.ID)
+		now := s.now()
+		switch {
+		case !grantKind(a.Kind):
+			return notExecutable("not_grantable")
+		case a.State == "completed":
+			return notExecutable("executed")
+		case a.State == "approved" && !now.Before(a.ExpiresAt):
+			return notExecutable("lapsed")
+		case a.State != "approved":
+			if a.effective(now) == "expired" {
+				return notExecutable("lapsed")
+			}
+			return notExecutable("not_approved")
+		case a.Approver != pr.VendorUser():
+			return notExecutable("not_approver")
+		}
+		u, err := get[vendorUser](tx, kVendorUser, repository.Global, pr.VendorUser())
+		if err != nil || u == nil {
+			return notFoundOr(err)
+		}
+		if u.Status != "active" || now.Sub(u.CredAt) < s.Cfg.MinApproverAge {
+			return notExecutable("not_approver")
+		}
+		out, err = s.vendorGrant(a, now)
+		if err != nil {
+			return err
+		}
+		if err := put(tx, kVendorAppr, repository.Global, a.ID, a, keys{k1: a.Org, k2: a.Requester}); err != nil {
+			return err
+		}
+		return s.vendorAudit(ctx, tx, vaudit{Org: a.Org, Action: "vendor.approval.grant_issued", Target: a.ID, Ticket: a.Ticket, Summary: "grant " + a.GrantJTI})
+	})
+	return out, err
 }
 
 // GetVendorApproval returns an approval to the vendor user who requested it or may approve it;

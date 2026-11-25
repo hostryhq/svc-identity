@@ -19,6 +19,9 @@ type catalogueEntry struct {
 func NewCatalogue(extra ...string) (*auth.Catalogue, error) {
 	ps := make([]auth.Permission, 0, len(catalogueEntries)+len(extra))
 	for _, k := range extra {
+		if PermissionRealm(k) != "" { // now in the generated catalogue (a product permission that was promoted)
+			continue
+		}
 		ps = append(ps, auth.Permission{Name: k, Owner: "product"})
 	}
 	for _, e := range catalogueEntries {

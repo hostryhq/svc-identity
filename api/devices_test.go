@@ -69,7 +69,7 @@ func TestActivationCodeLifecycleAndRegistrationProof(t *testing.T) {
 	if c := redeem(kds, code.Code, nil); c != 201 {
 		t.Fatalf("valid redemption: %d", c)
 	}
-	if c := redeem(double.NewDevice(newID()), code.Code, nil); c != 422 {
+	if c := redeem(double.NewDevice(newID()), code.Code, nil); c != 409 {
 		t.Fatalf("code redeemed twice: %d", c)
 	}
 	// A key already bound to an active device is refused for a different device id.

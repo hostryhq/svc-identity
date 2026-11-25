@@ -29,6 +29,27 @@ func memberDTO(m *member) gen.Member {
 	return g
 }
 
+// withCaution sets new_device_caution on a member read view: true while the member's account has an
+// active binding still inside its caution window (a new device, 24 hours). It is shown to support
+// so the owner can be told why a strong-only action is refused. Absent means false.
+func (s *Service) withCaution(tx repository.Tx, g gen.Member, m *member) (gen.Member, error) {
+	if m.AccountID == "" {
+		return g, nil
+	}
+	bs, err := find[binding](tx, kBinding, repository.Global, m.AccountID)
+	if err != nil {
+		return g, err
+	}
+	for i := range bs {
+		if bs[i].State == "active" && s.underCaution(&bs[i]) {
+			t := true
+			g.NewDeviceCaution = &t
+			break
+		}
+	}
+	return g, nil
+}
+
 func roleDTO(r *role) gen.Role {
 	return gen.Role{Id: r.ID, Name: r.Name, BuiltIn: r.BuiltIn, Permissions: append([]string{}, r.Perms...), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
@@ -87,7 +108,11 @@ func (s *Service) ListMembers(ctx context.Context, p gen.ListMembersParams) (gen
 				out.NextCursor = &c
 				break
 			}
-			out.Items = append(out.Items, memberDTO(&ms[i]))
+			g, err := s.withCaution(tx, memberDTO(&ms[i]), &ms[i])
+			if err != nil {
+				return err
+			}
+			out.Items = append(out.Items, g)
 		}
 		return nil
 	})
@@ -110,8 +135,8 @@ func (s *Service) GetMember(ctx context.Context, id string) (gen.Member, error) 
 		if err != nil || m == nil || !memberInScope(m, scope) {
 			return notFoundOr(err)
 		}
-		out = memberDTO(m)
-		return nil
+		out, err = s.withCaution(tx, memberDTO(m), m)
+		return err
 	})
 	return out, err
 }

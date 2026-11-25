@@ -25,10 +25,10 @@ func TestApprovalIsBoundToTheTargetResource(t *testing.T) {
 	var req gen.ApprovalRequest
 	// A request naming a path that is not the operation's is refused at filing.
 	e.expect(422, "", "POST", "/v1/approval-requests", second.Tokens.AccessToken, gen.CreateApprovalRequest{OperationId: "removeOwnerRole",
-		RequestMethod: gen.DELETE, RequestPath: "/v1/members", RequestBody: map[string]any{}})
+		RequestMethod: gen.CreateApprovalRequestRequestMethodDELETE, RequestPath: "/v1/members", RequestBody: map[string]any{}})
 	e.mustJSON(201, "POST", "/v1/approval-requests", second.Tokens.AccessToken, gen.CreateApprovalRequest{OperationId: "removeOwnerRole",
-		RequestMethod: gen.DELETE, RequestPath: path(memberA), RequestBody: map[string]any{}}, &req)
-	if req.Subject == nil || !strings.Contains(*req.Subject, "Remove owner role") || !strings.Contains(*req.Subject, memberA) {
+		RequestMethod: gen.CreateApprovalRequestRequestMethodDELETE, RequestPath: path(memberA), RequestBody: map[string]any{}}, &req)
+	if !strings.Contains(req.Subject, "Remove owner role") || !strings.Contains(req.Subject, memberA) {
 		t.Fatalf("the approver must see what is approved: %v", req.Subject)
 	}
 	e.mustJSON(200, "PUT", "/v1/approval-requests/"+req.Id+"/decision", first.Tokens.AccessToken, gen.DecideApproval{Decision: gen.Approve}, nil)

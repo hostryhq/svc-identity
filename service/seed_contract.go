@@ -143,11 +143,12 @@ func (sd *Seeder) Nonce(ctx context.Context, nonce string) error {
 }
 
 // Activation stores an activation code.
-func (sd *Seeder) Activation(ctx context.Context, tenant, id, code, outlet, kind string) error {
+func (sd *Seeder) Activation(ctx context.Context, tenant, id, code, outlet, kind, by string) error {
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
-		return put(tx, kActivation, repository.Global, crypto.MAC(s.Cfg.MACKey, "activation", code),
-			activationDoc{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, By: "seed", Expires: s.now().Add(10 * time.Minute)}, keys{k1: id})
+		ac := activationDoc{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, By: by, Expires: s.now().Add(10 * time.Minute), Created: s.now()}
+		ac.Key = crypto.MAC(s.Cfg.MACKey, "activation", code)
+		return ac.store(tx, ac.Key)
 	})
 }
 
@@ -176,7 +177,8 @@ func (sd *Seeder) ApprovalRequest(ctx context.Context, tenant, id, memberID, acc
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
 		now := s.now()
-		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8", Method: "POST", Path: "/v1/members",
+			Subject: "Add member Latha (Cashier at Main Restaurant)", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
 		return put(tx, kApprReq, repository.Global, id, r, keys{k1: tenant, k2: accountID})
 	})
 }
@@ -254,6 +256,8 @@ func (sd *Seeder) OwnerInvitationWithID(ctx context.Context, id, tenant, mobile,
 type SeedApproval struct {
 	ID, Kind, Requester, Approver, Org, Mobile, NewMobile, State string
 	CompletesAt                                                  time.Time
+	// Lifetime of the record; zero keeps the 5 minutes of a sign-in request. Grant kinds lapse after 24 hours.
+	Lifetime time.Duration
 }
 
 // VendorApproval stores a vendor approval record.
@@ -261,8 +265,12 @@ func (sd *Seeder) VendorApproval(ctx context.Context, p SeedApproval) error {
 	s := sd.s
 	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
 		now := s.now()
+		life := p.Lifetime
+		if life == 0 {
+			life = 5 * time.Minute
+		}
 		a := vendorApproval{ID: p.ID, Kind: p.Kind, Requester: p.Requester, Approver: p.Approver, Org: p.Org, Mobile: p.Mobile, NewMobile: p.NewMobile, Reason: "seeded for the contract run",
-			Ticket: "SUP-2041", Verified: "callback_to_registered_number", State: p.State, CreatedAt: now, ExpiresAt: now.Add(5 * time.Minute), CompletesAt: p.CompletesAt}
+			Ticket: "SUP-2041", Verified: "callback_to_registered_number", State: p.State, CreatedAt: now, ExpiresAt: now.Add(life), CompletesAt: p.CompletesAt}
 		if p.State == "approved" && p.Kind == "sign_in_code" {
 			code := "7QK39XD2"
 			a.CodeMAC = crypto.MAC(s.Cfg.MACKey, "vcode", p.Mobile, code)
