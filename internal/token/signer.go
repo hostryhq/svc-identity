@@ -35,9 +35,9 @@ type Key struct {
 // and the pack-signing key. NextTenant, when set, is published in the JWKS and in packs at least
 // 30 days before it first signs (rotation, section 2).
 type Signer struct {
-	TenantKey, VendorKey, Packer Key
-	NextTenant                   *Key
-	Random                       crypto.Random
+	TenantKey, VendorKey Key
+	NextTenant           *Key
+	Random               crypto.Random
 }
 
 // NewEphemeral generates fresh keys; used by tests, the double and dev runs without key files.
@@ -52,9 +52,6 @@ func NewEphemeral(r crypto.Random) (*Signer, error) {
 		return nil, err
 	}
 	if s.VendorKey, err = gen("v-vendor-1"); err != nil {
-		return nil, err
-	}
-	if s.Packer, err = gen("p-pack-1"); err != nil {
 		return nil, err
 	}
 	n, err := gen("k-tenant-2")
@@ -112,9 +109,18 @@ func (s *Signer) VendorGrant(claims any) (string, error) {
 	return crypto.SignES256(s.VendorKey.Priv, s.VendorKey.Kid, "JWT", claims)
 }
 
-// Pack signs an offline pack or wipe order with the pack-signing key.
+// PackTyp is the JWS header type of an offline pack.
+const PackTyp = "hostry-pack+jws"
+
+// Wipe signs a wipe order with the identity key (the same published key as packs), header type "pack" as before.
+func (s *Signer) Wipe(claims any) (string, error) {
+	return crypto.SignES256(s.TenantKey.Priv, s.TenantKey.Kid, "pack", claims)
+}
+
+// Pack signs an offline pack with the current identity (tenant realm) key, one of the pack's own
+// `identity_public_keys` (also served by the JWKS), under the header type hostry-pack+jws.
 func (s *Signer) Pack(claims any) (string, error) {
-	return crypto.SignES256(s.Packer.Priv, s.Packer.Kid, "pack", claims)
+	return crypto.SignES256(s.TenantKey.Priv, s.TenantKey.Kid, PackTyp, claims)
 }
 
 // Credential signs a device's LAN credential with the current identity (tenant realm) key, the key a
@@ -149,8 +155,5 @@ func (s *Signer) TenantKeys() *auth.StaticKeySet {
 func (s *Signer) VendorKeys() *auth.StaticKeySet {
 	return auth.NewStaticKeySet(auth.KeyDoc{Keys: map[string]*ecdsa.PublicKey{s.VendorKey.Kid: &s.VendorKey.Priv.PublicKey}})
 }
-
-// PackKey returns the public half of the pack-signing key.
-func (s *Signer) PackKey() *ecdsa.PublicKey { return &s.Packer.Priv.PublicKey }
 
 var _ service.TokenIssuer = (*Signer)(nil)

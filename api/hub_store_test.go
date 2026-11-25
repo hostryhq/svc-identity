@@ -189,3 +189,56 @@ func TestStoreClaimIsSignedAndFixed(t *testing.T) {
 }
 
 func ptrStore(s gen.StoreProtection) *gen.StoreProtection { return &s }
+
+// Round 7: a pack is a JWS under a published identity key (typ hostry-pack+jws), carries issuer_env, and a hub pack
+// lists the outlet's other active devices as peers, refreshed when a device registers or is revoked.
+func TestHubPackPeersAndSignedPack(t *testing.T) {
+	e := newEnv(t)
+	owner, _ := e.ownerSession()
+	tok := owner.Tokens.AccessToken
+	protected := gen.Protected
+	hub := double.NewDevice(newID())
+	act, _ := e.activateStore(tok, gen.Hub, hub, &protected, 201)
+	hc, err := act.OfflinePack.Claims.AsHubPackClaims()
+	if err != nil || len(hc.Peers) != 0 || hc.IssuerEnv != gen.Test {
+		t.Fatalf("first hub pack: %v peers=%d env=%s", err, len(hc.Peers), hc.IssuerEnv)
+	}
+	keep, drop := double.NewDevice(newID()), double.NewDevice(newID())
+	e.activate(tok, gen.Pos, keep)
+	e.activate(tok, gen.Pos, drop)
+	e.mustJSON(200, "PUT", "/v1/devices/"+drop.ID+"/revocation", tok, gen.RevokeDevice{Reason: gen.RevokeDeviceReasonLost}, &gen.Device{})
+	var dtok gen.DeviceToken
+	e.mustJSON(200, "POST", "/v1/tokens/device", "", gen.DeviceGrant{GrantType: gen.DeviceGrantGrantTypeDevice, DeviceId: hub.ID, Assertion: hub.Assert(e.d.Clock.Now(), e.jti(), service.AssertionClaims{})}, &dtok)
+	var fresh gen.OfflinePack
+	e.mustJSON(200, "GET", "/v1/devices/"+hub.ID+"/offline-packs/latest", dtok.AccessToken, nil, &fresh)
+	fh, err := fresh.Claims.AsHubPackClaims()
+	if err != nil || fresh.PackV <= act.OfflinePack.PackV {
+		t.Fatalf("refreshed hub pack: %v v%d", err, fresh.PackV)
+	}
+	if len(fh.Peers) != 1 || fh.Peers[0].DeviceId != keep.ID || fh.Peers[0].Kid != keep.KID() || fh.Peers[0].Kind != gen.Pos {
+		t.Fatalf("peers must be the one active tablet only: %+v", fh.Peers)
+	}
+	// The pack JWS verifies end to end: its kid is one of the pack's own identity keys, and the signed payload
+	// holds the same peers and issuer_env; each peer credential verifies under the same keys.
+	var key *gen.Jwk
+	hdrRaw, _ := base64.RawURLEncoding.DecodeString(strings.Split(fresh.Jws, ".")[0])
+	var hdr map[string]string
+	mustUnmarshal(t, hdrRaw, &hdr)
+	for i := range fh.IdentityPublicKeys {
+		if fh.IdentityPublicKeys[i].Kid == hdr["kid"] {
+			key = &fh.IdentityPublicKeys[i]
+		}
+	}
+	if key == nil || hdr["typ"] != "hostry-pack+jws" || hdr["alg"] != "ES256" {
+		t.Fatalf("pack header %v is not under a published identity key", hdr)
+	}
+	_, payload := jwsParts(t, fresh.Jws, *key)
+	peers, _ := payload["peers"].([]any)
+	if payload["issuer_env"] != "test" || len(peers) != 1 || peers[0].(map[string]any)["device_id"] != keep.ID {
+		t.Fatalf("signed payload: %v", payload)
+	}
+	_, pc := jwsParts(t, fh.Peers[0].Credential, *key)
+	if pc["device_id"] != keep.ID || pc["kind"] != "pos" || int64(pc["not_after"].(float64)) != fh.OfflineValidUntil.Unix() {
+		t.Fatalf("peer credential: %v", pc)
+	}
+}

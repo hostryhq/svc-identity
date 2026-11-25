@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"slices"
+	"sort"
 	"time"
 
 	auth "github.com/hostryhq/go-auth"
@@ -118,7 +119,7 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	sum := sha256.New()
 	digestParts := []any{members, revoked, series, d.State, books}
 	if hub {
-		digestParts = []any{hubMembers(members), revoked, d.State}
+		digestParts = []any{hubMembers(members), revoked, d.State, peerDigest(ds, d.ID)} // a registered or revoked peer changes the digest, so the next fetch is a newer pack
 	}
 	if ent != nil { // appended only when present, so a pack without a snapshot keeps its earlier digest
 		digestParts = append(digestParts, ent.EntitlementsV)
@@ -166,7 +167,12 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	op := s.Cfg.OpSigning
 	opKey := gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: op.X, Y: op.Y, Kid: "op-1", Alg: gen.ES256, Use: gen.Sig}
 	if hub {
+		peers, err := s.hubPeers(ds, d.ID, until)
+		if err != nil {
+			return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+		}
 		hc := gen.HubPackClaims{Device: pd, IdentityPublicKeys: idKeys, IntentTableVersion: 1, IssuedAt: now, Members: hubMembers(members),
+			IssuerEnv: s.issuerEnv(), Peers: peers,
 			OfflineValidUntil: until, OpSigningPublicKey: opKey, OrganisationId: d.TenantID, PackV: pv.Latest, RevokedDeviceIds: revoked}
 		jws, err := s.Tokens.Pack(hc)
 		if err != nil {
@@ -186,6 +192,7 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	}
 	claims.Entitlements = ent
 	claims.Device, claims.IdentityPublicKeys, claims.OpSigningPublicKey = pd, idKeys, opKey
+	claims.IssuerEnv = s.issuerEnv()
 	jws, err := s.Tokens.Pack(claims)
 	if err != nil {
 		return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
@@ -193,6 +200,56 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	out := gen.OfflinePack{IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}
 	if err := out.Claims.FromOfflinePackClaims(claims); err != nil {
 		return gen.OfflinePack{}, err
+	}
+	return out, nil
+}
+
+// issuerEnv is the pack's `issuer_env` claim: HOSTRY_ENV when it is dev, test or ci, otherwise live.
+func (s *Service) issuerEnv() gen.IssuerEnv {
+	switch s.Cfg.Environment {
+	case "dev":
+		return gen.Dev
+	case "test":
+		return gen.Test
+	case "ci":
+		return gen.Ci
+	}
+	return gen.Live
+}
+
+// peerDevices are the devices a hub lists as peers: the other active devices of its outlet, any kind but hub.
+func peerDevices(ds []device, self string) []device {
+	var out []device
+	for _, o := range ds {
+		if o.ID != self && o.State == "active" && o.Kind != "hub" {
+			out = append(out, o)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// peerDigest is what of the peers goes into a hub pack's digest: id, kind and key, so registering or
+// revoking a device yields a new pack version.
+func peerDigest(ds []device, self string) [][3]string {
+	out := [][3]string{}
+	for _, o := range peerDevices(ds, self) {
+		out = append(out, [3]string{o.ID, o.Kind, o.Key.X + o.Key.Y})
+	}
+	return out
+}
+
+// hubPeers builds the peer entries of a hub pack, each the data of that peer's own PackDevice.
+func (s *Service) hubPeers(ds []device, self string, until time.Time) ([]gen.HubPackPeer, error) {
+	out := []gen.HubPackPeer{}
+	for _, o := range peerDevices(ds, self) {
+		o := o
+		cred, err := s.credentialJWS(&o, until)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, gen.HubPackPeer{DeviceId: o.ID, Kind: gen.DeviceKind(o.Kind), Kid: DeviceKID(o.ID), Store: storeOf(&o), Credential: cred,
+			PublicKey: gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: o.Key.X, Y: o.Key.Y}})
 	}
 	return out, nil
 }

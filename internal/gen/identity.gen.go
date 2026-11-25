@@ -454,6 +454,30 @@ func (e InvitationStatus) Valid() bool {
 	}
 }
 
+// Defines values for IssuerEnv.
+const (
+	Ci   IssuerEnv = "ci"
+	Dev  IssuerEnv = "dev"
+	Live IssuerEnv = "live"
+	Test IssuerEnv = "test"
+)
+
+// Valid indicates whether the value is a known member of the IssuerEnv enum.
+func (e IssuerEnv) Valid() bool {
+	switch e {
+	case Ci:
+		return true
+	case Dev:
+		return true
+	case Live:
+		return true
+	case Test:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for JwkAlg.
 const (
 	ES256 JwkAlg = "ES256"
@@ -2115,7 +2139,7 @@ type EntitlementSnapshotOrganisationStatus string
 
 // HubPackClaims Payload of the signed offline pack of a device of kind `hub` (ADR-0002 A3.4 item 3). Holds its LAN credential, `pack_v`, member ids with status and permissions, the outlet's revoked device ids, the intent table version, the current and next identity keys, the gateway's op-signing key, `issued_at` and `offline_valid_until`. It never holds display names, PIN verifiers or salts, series codes or manual books, so it carries no secret and the hub may show it to a device it refuses as revoked (ADR-0005 section 4 item 2). The hub fetches it at every cloud contact with a device-key assertion (getDeviceOfflinePack) and never hands packs to devices.
 //
-// Example: {"device":{"brand_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6a","credential":"cred.jws.example","device_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f","kid":"dev-4a5f-1","kind":"hub","outlet_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61","public_key":{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"store":"protected"},"identity_public_keys":[{"alg":"ES256","crv":"P-256","kid":"k-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}],"intent_table_version":3,"issued_at":"2026-11-24T13:05:11.120Z","members":[{"member_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64","permissions":["order.create"],"status":"active"}],"offline_valid_until":"2026-12-08T13:05:11.120Z","op_signing_public_key":{"alg":"ES256","crv":"P-256","kid":"o-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"organisation_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60","pack_v":7,"revoked_device_ids":[]}
+// Example: {"device":{"brand_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6a","credential":"cred.jws.example","device_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f","kid":"dev-4a5f-1","kind":"hub","outlet_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61","public_key":{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"store":"protected"},"identity_public_keys":[{"alg":"ES256","crv":"P-256","kid":"k-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}],"intent_table_version":3,"issued_at":"2026-11-24T13:05:11.120Z","issuer_env":"dev","members":[{"member_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64","permissions":["order.create"],"status":"active"}],"offline_valid_until":"2026-12-08T13:05:11.120Z","op_signing_public_key":{"alg":"ES256","crv":"P-256","kid":"o-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"organisation_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60","pack_v":7,"peers":[{"credential":"cred.jws.example","device_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e","kid":"dev-4a5e-1","kind":"pos","public_key":{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"store":"protected"}],"revoked_device_ids":[]}
 type HubPackClaims struct {
 	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
 	Device PackDevice `json:"device"`
@@ -2132,6 +2156,11 @@ type HubPackClaims struct {
 	//
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
+
+	// IssuerEnv The environment of the identity that signed the pack (its HOSTRY_ENV), claimed in every pack. A build that is not a development build refuses a pack whose `issuer_env` is not `live`; a browser build refuses any pack whose `issuer_env` is not `dev` when it is itself a development build, and refuses every non-`live` issuer otherwise. The claim is signed with the pack, so a pack from a dev issuer cannot pass for a live one.
+	//
+	// Example: dev
+	IssuerEnv IssuerEnv `json:"issuer_env"`
 
 	// Members Members allowed at the outlet, ids only.
 	Members []HubPackMember `json:"members"`
@@ -2153,6 +2182,9 @@ type HubPackClaims struct {
 	//
 	// Example: 7
 	PackV int `json:"pack_v"`
+
+	// Peers The other devices of the outlet as identity knows them at issue (active, not revoked, any kind but `hub`), so a device can relay to a peer tablet-to-tablet with no cloud contact first. Each entry is the same data as that peer's own `PackDevice`; an entry holds no member data. A peer revoked later is learned from `revoked_device_ids` of a newer pack or from the cloud.
+	Peers []HubPackPeer `json:"peers"`
 
 	// RevokedDeviceIds Revoked device ids for the outlet.
 	RevokedDeviceIds []Id `json:"revoked_device_ids"`
@@ -2179,6 +2211,37 @@ type HubPackMember struct {
 // Example: active
 type HubPackMemberStatus string
 
+// HubPackPeer A peer device of the hub's outlet as a hub pack lists it, so offline tablet-to-tablet relay needs no cloud contact first. The same facts as the peer's `PackDevice`, without its outlet and brand (those are the hub's).
+type HubPackPeer struct {
+	// Credential The peer's identity-signed LAN credential as a compact JWS (as `PackDevice.credential`), with `not_after` = this pack's `offline_valid_until`.
+	//
+	// Example: cred.jws.example
+	Credential string `json:"credential"`
+
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	DeviceId Id `json:"device_id"`
+
+	// Kid Key id of the peer's own credential (one key per device id for life, ADR-0002 S7).
+	//
+	// Example: dev-4a5e-1
+	Kid string `json:"kid"`
+
+	// Kind Device kind (ADR-0005 section 4).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
+	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store StoreProtection `json:"store"`
+}
+
 // Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 //
 // Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
@@ -2188,6 +2251,11 @@ type Id = string
 //
 // Example: pending
 type InvitationStatus string
+
+// IssuerEnv The environment of the identity that signed the pack (its HOSTRY_ENV), claimed in every pack. A build that is not a development build refuses a pack whose `issuer_env` is not `live`; a browser build refuses any pack whose `issuer_env` is not `dev` when it is itself a development build, and refuses every non-`live` issuer otherwise. The claim is signed with the pack, so a pack from a dev issuer cannot pass for a live one.
+//
+// Example: dev
+type IssuerEnv string
 
 // Jwk One published signing key (RFC 7517).
 type Jwk struct {
@@ -2370,7 +2438,7 @@ type OfflinePack struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
 
-	// Jws Compact ES256 JWS whose payload is OfflinePackClaims, or HubPackClaims for a hub.
+	// Jws Compact ES256 JWS whose payload is OfflinePackClaims, or HubPackClaims for a hub. Header `{"alg":"ES256","kid":<kid>,"typ":"hostry-pack+jws"}`; payload = the RFC 8785 JSON of the claims. It is signed with an identity key published in `identity_public_keys` (the claim of every pack: the current and the next key, also served by the identity JWKS), so a hub or device verifies the whole pack with keys it already holds and refuses a pack whose `kid` is not among them. The `credential` strings inside are themselves JWS (`hostry-cred+jws`) under the same keys.
 	//
 	// Example: pack.jws.example
 	Jws string `json:"jws"`
@@ -2421,6 +2489,11 @@ type OfflinePackClaims struct {
 	//
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
+
+	// IssuerEnv The environment of the identity that signed the pack (its HOSTRY_ENV), claimed in every pack. A build that is not a development build refuses a pack whose `issuer_env` is not `live`; a browser build refuses any pack whose `issuer_env` is not `dev` when it is itself a development build, and refuses every non-`live` issuer otherwise. The claim is signed with the pack, so a pack from a dev issuer cannot pass for a live one.
+	//
+	// Example: dev
+	IssuerEnv IssuerEnv `json:"issuer_env"`
 
 	// ManualBooks The active paper bill books of the device outlet (tenancy `listOutletManualBookSeries`), entry-only. A device refuses to record a typed number whose code is in neither `series` nor here. Absent or empty when the outlet has none.
 	ManualBooks *[]PackManualBook `json:"manual_books,omitempty"`
