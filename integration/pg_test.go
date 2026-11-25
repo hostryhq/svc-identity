@@ -280,6 +280,13 @@ func (f *failingLog) RecordInTx(ctx context.Context, tx tenancy.Execer, e auth.V
 	return f.AccessLog.RecordInTx(ctx, tx, e)
 }
 
+func (f *failingLog) RecordPlatformInTx(ctx context.Context, tx tenancy.Execer, e auth.VendorAccessEntry) error {
+	if f.fail {
+		return fmt.Errorf("injected")
+	}
+	return f.AccessLog.RecordPlatformInTx(ctx, tx, e)
+}
+
 func newE2E(t *testing.T) (*e2e, *failingLog) {
 	t.Helper()
 	st, db := newDB(t)
@@ -454,6 +461,21 @@ func TestOverPostgresSupportAccessIsFailClosed(t *testing.T) {
 	if rows < 1 { // the support start is recorded
 		t.Fatalf("vendor_access_log rows after a support start: %d", rows)
 	}
+	// An organisation-less vendor route writes the platform table (no tenant column, no row-level
+	// security), not vendor_access_log; and a failing platform write fails it closed too.
+	plat := e.count(`SELECT count(*) FROM platform_access_log`)
+	e.must(200, "GET", "/internal/v1/vendor/users", vs.AccessToken, nil, nil, svc()...)
+	if got := e.count(`SELECT count(*) FROM platform_access_log`); got != plat+1 {
+		t.Fatalf("an organisation-less read wrote %d platform rows, want 1", got-plat)
+	}
+	if got := e.count(`SELECT count(*) FROM vendor_access_log`); got != rows {
+		t.Fatalf("an organisation-less read wrote %d tenant rows, want 0", got-rows)
+	}
+	fl.fail = true
+	if c, b := e.do("GET", "/internal/v1/vendor/users", vs.AccessToken, nil, svc()...); c < 500 || bytes.Contains(b, []byte("root@hostry.test")) {
+		t.Fatalf("platform audit failure must fail closed: %d %s", c, b)
+	}
+	fl.fail = false
 	e.must(200, "GET", "/v1/members", st.Token.AccessToken, nil, nil, svc()...)
 	if got := e.count(`SELECT count(*) FROM vendor_access_log`); got != rows+1 {
 		t.Fatalf("a support read wrote %d rows, want 1", got-rows)

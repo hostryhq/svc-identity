@@ -49,6 +49,7 @@ Local development needs an uncommitted `go.work` listing `.`, `../go-common`, `.
 | `HOSTRY_IDENTITY_{TENANT,VENDOR,PACK}_KEY_FILE` | PEM PKCS#8 P-256 signing keys (required outside dev/test/ci) |
 | `HOSTRY_IDENTITY_{MAC,PROOF,TOTP}_KEY_FILE` | base64 files, 32 random bytes each: keyed hashes, PIN proof-key encryption, TOTP encryption |
 | `HOSTRY_SERVICE_KEYS_DIR` | service key registry: `<service>.pub.pem` public keys (ADR-0005 section 9) |
+| `HOSTRY_TENANCY_URL`, `HOSTRY_SERVICE_SIGNING_KEY_FILE` | base URL of the tenancy service and identity's own service-token key (PEM PKCS#8 P-256, key id `identity`). Required outside dev/test/ci; without them (dev only) billing devices are issued no series and outlets are not checked |
 | `HOSTRY_OP_SIGNING_PUB_FILE` | the sync gateway's op-signing public key, carried in packs |
 | `HOSTRY_IDENTITY_SMS` / `..._ALLOW_TEST_SMS` | only `test` exists (no DLT-registered provider yet). It refuses to start unless `HOSTRY_ENV` is dev, test or ci **and** `ALLOW_TEST_SMS=1` |
 | `HOSTRY_IDENTITY_VENDOR_SIGNIN_CODE`, `..._VENDOR_RECOVERY` | `1` switches the vendor-assisted flows on (off by default) |
@@ -64,8 +65,12 @@ HOSTRY_PG_DSN=postgres://hostry:hostry-dev-only@127.0.0.1:55442/hostry?sslmode=d
   go test -race -tags integration ./integration/... ./contract/...    # on the infra dev stack (Postgres 17)
 ```
 
-The contract suite (`contract/`) seeds a fresh target per operation and runs `api-specs/contracttest` for that
-operation, against the double and against the service assembled over Postgres. The double is not a second
+The contract suite (`contract/`) runs `api-specs/contracttest` once per operation in a fresh target, which the
+harness puts into the operation's example world (`SeedWorld`, `contract/worlds.go`: base, session-open,
+device-revoked, vendor-approval-pending and the rest of `info.x-example-worlds`), against the double and against
+the service assembled over Postgres. Nothing is skipped. Tenancy's own double (`double.Options{WithTenancy: true}`,
+`Double.Tenancy`) is the series registry in that run, in its matching world. `contract/contract.go` (`specGaps`) lists
+the five operations whose example cannot be true as written and what the run does instead. The double is not a second
 implementation: it composes the same `service` and `api` layers over the in-memory repository, a fake clock,
 deterministic ids and a recording SMS sender.
 
@@ -74,7 +79,16 @@ deterministic ids and a recording SMS sender.
 - No deployment, no image publishing, no staging configuration (ADR-0001 AM12).
 - SMS: provider interface and a test sender only (DLT registration is not available). Email: setup links for vendor
   users created through the API are handed to a mail interface with no real implementation; use the CLI.
-- The document-series registry belongs to tenancy: packs carry an empty `series` list and `registration_unverified`
-  is not produced until the tenancy client exists. Outlets are not checked against tenancy.
+- Series come from tenancy (`internal/tenancyclient`, generated from the tenancy contract): a pos device is issued
+  an active, a waiter a dormant series for the document types in `Config.SeriesDocTypes` (default `tax_invoice`) when
+  it registers, and the codes are stored with the device and carried in its pack. A device whose outlet's tax
+  registration is not verified registers with `billing_capability: none` and no series (the 409
+  `registration_unverified` of tenancy is not surfaced); it is issued them on the pack fetch after verification. An
+  outlet unknown to the caller's tenant is refused (422) for billing kinds; kinds with no billing (kds, hub,
+  personal) are not checked, because tenancy has no internal outlet-existence route. The call is made inside the
+  registration transaction, bounded by a 5 s timeout and one retry.
+- Vendor approval grants (`org_suspend`, `org_reinstate`, `org_close`, `tax_rule_set_publish`) are signed with the
+  vendor-realm key as a JWS of type `vendor_approval`; go-auth has no verifier for them yet, so the executing
+  services cannot check one until it has.
 - Request bodies are decoded strictly (unknown fields refused) but not validated against the full schema; required
   fields are checked where a rule needs them.
