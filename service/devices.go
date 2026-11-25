@@ -342,7 +342,7 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 				return err
 			}
 		}
-		pack, err := s.buildPack(tx, dev)
+		pack, err := s.buildPack(ctx, tx, dev)
 		if err != nil {
 			return err
 		}

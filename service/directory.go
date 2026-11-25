@@ -27,8 +27,8 @@ func DeviceKID(deviceID string) string {
 	return "dev-" + t + "-1"
 }
 
-// pubX962 is the uncompressed X9.62 P-256 point (0x04 || X || Y), base64url: the sync wire form of a key.
-func pubX962(k crypto.JWK) (string, error) {
+// PubX962 is the uncompressed X9.62 P-256 point (0x04 || X || Y), base64url: the sync wire form of a key.
+func PubX962(k crypto.JWK) (string, error) {
 	x, err := base64.RawURLEncoding.DecodeString(k.X)
 	if err != nil || len(x) != 32 {
 		return "", errInvalid("key", "invalid")
@@ -73,7 +73,7 @@ func (s *Service) GetDeviceCredential(ctx context.Context, id string) (gen.Devic
 		if err != nil || d == nil {
 			return notFoundOr(err)
 		}
-		pub, err := pubX962(d.Key)
+		pub, err := PubX962(d.Key)
 		if err != nil {
 			return err
 		}

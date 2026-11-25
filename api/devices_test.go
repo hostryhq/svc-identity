@@ -183,7 +183,7 @@ func TestRevokeDeviceDrainTokenAndWipeOrder(t *testing.T) {
 	e.expect(401, "", "GET", "/v1/devices/"+dev.ID+"/offline-packs/latest", dt.AccessToken, nil)
 	e.expect(409, "wipe_order_not_ready", "GET", "/v1/devices/"+dev.ID+"/wipe-order", dt.AccessToken, nil)
 	// The gateway reports the drain; the order is issued only 15 minutes later on the server clock.
-	e.mustJSON(200, "PUT", "/internal/v1/devices/"+dev.ID+"/drain", "", gen.RecordDrain{DrainedThrough: []gen.StreamSequence{{Stream: "device-ops", Seq: 40}}}, nil,
+	e.mustJSON(200, "PUT", "/internal/v1/devices/"+dev.ID+"/drain", "", gen.RecordDrain{DrainedThrough: through(device0Ops, 40), Statement: ptr(stmt(t, dev, dev.ID, `[{"stream":"device-ops","seq":40,"h":"ab"}]`, `[]`, ""))}, nil,
 		"Hostry-Service-Token", e.d.ServiceToken("sync", org))
 	e.d.Clock.Advance(4 * time.Minute)
 	var dt2 gen.DrainToken

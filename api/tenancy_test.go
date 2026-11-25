@@ -59,13 +59,13 @@ func TestBillingDeviceCarriesTenancySeriesInItsPack(t *testing.T) {
 		t.Fatalf("pos activation: %d %+v", status, act.Device)
 	}
 	s := act.OfflinePack.Claims.Series
-	if len(s) != 1 || s[0].Code != "A7K" || s[0].DocType != gen.TaxInvoice || s[0].State != gen.PackSeriesStateActive || s[0].TaxRegistrationId != tenReg {
+	if len(s) != 2 || s[0].Code != "A7K" || s[0].DocType != gen.TaxInvoice || s[0].State != gen.PackSeriesStateActive || s[0].TaxRegistrationId != tenReg || s[1].Code != "A7M" || s[1].DocType != gen.CreditNote {
 		t.Fatalf("pos pack series: %+v", s)
 	}
 	// A waiter tablet gets a dormant series of its own under the same registration.
 	status, wact := e.activateAt(tok, tenOutlet, gen.Waiter, double.NewDevice(newID()))
 	ws := wact.OfflinePack.Claims.Series
-	if status != 201 || len(ws) != 1 || ws[0].State != gen.PackSeriesStateDormant || ws[0].Code == "A7K" || ws[0].Code == "A7M" || ws[0].TaxRegistrationId != tenReg {
+	if status != 201 || len(ws) != 2 || ws[0].State != gen.PackSeriesStateDormant || ws[0].Code == "A7K" || ws[0].Code == "A7M" || ws[0].TaxRegistrationId != tenReg {
 		t.Fatalf("waiter: %d series %+v", status, ws)
 	}
 	// A kitchen display has no billing and is issued nothing.
@@ -88,7 +88,7 @@ func TestUnverifiedRegistrationRegistersWithoutBillingThenGetsSeries(t *testing.
 	}
 	var pack gen.OfflinePack
 	e.mustJSON(200, "GET", "/v1/devices/"+pos.ID+"/offline-packs/latest", tok, nil, &pack)
-	if len(pack.Claims.Series) != 1 || len(pack.Claims.Series[0].Code) != 3 || pack.PackV <= act.OfflinePack.PackV {
+	if len(pack.Claims.Series) != 2 || len(pack.Claims.Series[0].Code) != 3 || pack.PackV <= act.OfflinePack.PackV {
 		t.Fatalf("pack after verification: v%d series %+v", pack.PackV, pack.Claims.Series)
 	}
 	var d gen.Device
@@ -125,7 +125,7 @@ func TestTenancyOutageIsRetriedWithinTheCallAndFailsAsUnavailable(t *testing.T) 
 	}})
 	status, act := e.activateAt(tok, tenOutlet, gen.Pos, double.NewDevice(newID()))
 	remove()
-	if status != 201 || len(act.OfflinePack.Claims.Series) != 1 || hits.Load() != 2 {
+	if status != 201 || len(act.OfflinePack.Claims.Series) != 2 || hits.Load() != 2 {
 		t.Fatalf("one outage: %d hits %d series %+v", status, hits.Load(), act.OfflinePack.Claims.Series)
 	}
 	// A longer outage answers 503.

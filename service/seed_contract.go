@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/repository"
 )
 
@@ -153,14 +154,55 @@ func (sd *Seeder) Activation(ctx context.Context, tenant, id, code, outlet, kind
 }
 
 // PackHistory records that a pack version was issued to a device listing members and series.
-func (sd *Seeder) PackHistory(ctx context.Context, tenant, deviceID string, packV int, members, series []string) error {
+// perms gives each listed member the permissions the pack granted (members without an entry hold none);
+// the pack is valid offline for the configured offline days from now.
+func (sd *Seeder) PackHistory(ctx context.Context, tenant, deviceID string, packV int, members, series []string, perms map[string][]string) error {
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
-		h := packHist{ID: deviceID + ":" + itoa(packV), Device: deviceID, PackV: packV, Members: members, Series: series, At: s.now()}
+		pm := make([]gen.PackMember, 0, len(members))
+		for _, m := range members {
+			pm = append(pm, gen.PackMember{MemberId: m, Permissions: perms[m]})
+		}
+		gd, err := s.storePackGrants(tx, tenant, pm)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		h := packHist{ID: deviceID + ":" + itoa(packV), Device: deviceID, PackV: packV, Members: members, Series: series, At: now,
+			Until: now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour), Grants: gd}
 		if err := put(tx, kPackVer, tenant, deviceID, packVer{Latest: packV}, keys{}); err != nil {
 			return err
 		}
 		return put(tx, kPackHist, tenant, h.ID, h, keys{k1: deviceID})
+	})
+}
+
+// KeyLossRecovery records that device newID adopted the key-lost device oldID under recovery id, approved by
+// approver: the old device is revoked with reason key_lost and the recovery stays open until its drain is
+// recorded (ADR-0002 A1.3; ADR-0005 A3.2 rows 4 and 5). No identity route creates one yet.
+func (sd *Seeder) KeyLossRecovery(ctx context.Context, tenant, id, oldID, newID, approver string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		old, err := get[device](tx, kDevice, tenant, oldID)
+		if err != nil || old == nil {
+			return notFoundOr(err)
+		}
+		nd, err := get[device](tx, kDevice, tenant, newID)
+		if err != nil || nd == nil {
+			return notFoundOr(err)
+		}
+		nd.Recovers = oldID
+		if err := put(tx, kDevice, tenant, newID, nd, keys{k1: nd.OutletID}); err != nil {
+			return err
+		}
+		old.State, old.RevokedAt = "revoked", s.now()
+		if err := put(tx, kDevice, tenant, oldID, old, keys{k1: old.OutletID}); err != nil {
+			return err
+		}
+		if err := s.addRevocationRow(tx, revocationDoc{TenantID: tenant, Type: "device", Subject: oldID, Reason: "key_lost", Recovery: id}); err != nil {
+			return err
+		}
+		return put(tx, kDevRecov, tenant, id, deviceRecovery{ID: id, TenantID: tenant, OldDeviceID: oldID, NewDeviceID: newID, ApproverID: approver, RecoveredAt: s.now()}, keys{k1: oldID})
 	})
 }
 

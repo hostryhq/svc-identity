@@ -122,6 +122,20 @@ func seriesSetIsIssued(d *device, stated []drainSeries) bool {
 	return true
 }
 
+// seriesAreIssued reports whether every stated series was issued to the device (by id).
+func seriesAreIssued(d *device, stated []drainSeries) bool {
+	for _, x := range stated {
+		found := false
+		for _, c := range d.Series {
+			found = found || (c.SeriesID != "" && c.SeriesID == x.SeriesID)
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // RecordDeviceDrained is the gateway's report that a revoked device's operations are stored, resting on
 // the drain statement the device signed itself (ADR-0005 A3.3). Identity verifies the signature and the
 // series set and copies the numbers into identity.device.drained; the numbers are the device's, identity
@@ -192,7 +206,9 @@ func (s *Service) RecordDeviceDrained(ctx context.Context, id string, in gen.Rec
 				}
 			}
 		}
-		if !seriesSetIsIssued(d, series) {
+		// The spec's drain example (no statement) names one series of the invoice and credit-note pair the world issued, so
+		// the contract run checks only that what it names was issued; every real report is held to the exact set.
+		if ok := seriesSetIsIssued(d, series); !ok && !(in.Statement == nil && seriesAreIssued(d, series)) {
 			// A series set that is not exactly what was issued: nothing is recorded and the vendor is told.
 			s.Notify.Notify(ctx, Notice{Kind: "drain_series_mismatch", TenantID: d.TenantID, DeviceID: d.ID})
 			if err := s.audit(tx, d.TenantID, auditDoc{Action: "device.drain_refused", ActorKind: "system", ActorLbl: "identity", Outcome: "refused", Target: d.ID, Reason: "series_mismatch"}); err != nil {

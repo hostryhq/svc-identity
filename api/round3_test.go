@@ -298,8 +298,9 @@ func TestDrainedDeviceEmitsOneEvent(t *testing.T) {
 	dev := double.NewDevice(newID())
 	e.activate(tok, gen.Pos, dev)
 	e.mustJSON(200, "PUT", "/v1/devices/"+dev.ID+"/revocation", tok, gen.RevokeDevice{Reason: gen.RevokeDeviceReasonLost}, &gen.Device{})
+	st := stmt(t, dev, dev.ID, `[{"stream":"device-ops","seq":40,"h":"ab"}]`, `[]`, "")
 	report := func() {
-		e.mustJSON(200, "PUT", "/internal/v1/devices/"+dev.ID+"/drain", "", gen.RecordDrain{DrainedThrough: []gen.StreamSequence{{Stream: "device-ops", Seq: 40}}}, nil,
+		e.mustJSON(200, "PUT", "/internal/v1/devices/"+dev.ID+"/drain", "", gen.RecordDrain{DrainedThrough: through(device0Ops, 40), Statement: &st}, nil,
 			"Hostry-Service-Token", e.d.ServiceToken("sync", org))
 	}
 	report()

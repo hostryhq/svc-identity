@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,9 +23,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hostryhq/go-common/bus"
 	"github.com/hostryhq/go-common/clock"
+	"github.com/hostryhq/go-common/events"
 	"github.com/hostryhq/go-common/health"
 	"github.com/hostryhq/go-common/ids"
+	"github.com/hostryhq/go-common/inbox"
 	"github.com/hostryhq/go-common/logx"
 	"github.com/hostryhq/go-common/outbox"
 	"github.com/hostryhq/svc-identity/internal/compose"
@@ -130,6 +134,7 @@ func serve(ctx context.Context, cfg *config) error {
 		if err := startRelay(ctx, cfg, st, log); err != nil {
 			return err
 		}
+		startConsumers(ctx, cfg, st, res.Service, log)
 	} else {
 		log.Warn("HOSTRY_NATS_URL is not set: events stay in the outbox and are not relayed")
 	}
@@ -178,6 +183,29 @@ func serve(ctx context.Context, cfg *config) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdown)
+}
+
+// startConsumers binds identity's durable consumers: tenancy and billing publish vendor_access.recorded, from
+// which identity marks an executed vendor approval (ADR-0005 A3.4). The handler is idempotent on its own; the
+// inbox adds the dedupe row and the parking of a poison event.
+func startConsumers(ctx context.Context, cfg *config, st *postgres.Store, svc *service.Service, log *slog.Logger) {
+	nc, err := bus.Connect(cfg.NATSURL, "identity", cfg.NATSSeedFile)
+	if err != nil {
+		log.Error("consumer: connect to the bus", "error", err)
+		return
+	}
+	handle := func(ctx context.Context, _ *sql.Tx, e events.Envelope) error { return svc.ConsumeVendorAccess(ctx, e) }
+	for _, publisher := range []string{"tenancy", "billing"} {
+		c, err := bus.BindConsumer(ctx, nc, publisher, "identity")
+		if err != nil {
+			log.Error("consumer: bind", "publisher", publisher, "error", err)
+			continue
+		}
+		sub := &inbox.Subscriber{DB: st.DB(), Consumer: "identity." + publisher, Handle: handle, Log: log,
+			OnPark: func(c, id, reason string) { log.Error("event parked", "consumer", c, "event_id", id, "reason", reason) }}
+		go func() { _ = sub.Run(ctx, c.Source(5*time.Second)) }()
+	}
+	go func() { <-ctx.Done(); nc.Close() }()
 }
 
 func startRelay(ctx context.Context, cfg *config, st *postgres.Store, log *slog.Logger) error {

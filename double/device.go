@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/service"
 )
 
@@ -55,6 +56,23 @@ func PinSecrets(p crypto.PinParams, pin string, salt []byte) crypto.PinSecrets {
 		panic(err)
 	}
 	return s
+}
+
+// KID is the key id identity gives the device's key (the credential's kid).
+func (d *Device) KID() string { return service.DeviceKID(d.ID) }
+
+// SignDrainStatement sets the key id and signs a drain statement the way the shell does (ADR-0005 A3.3):
+// ES256, raw r||s, over "hostry-drain-v1\n" + the canonical JSON of the statement without its signature.
+func (d *Device) SignDrainStatement(st gen.DrainStatement) gen.DrainStatement {
+	st.Kid, st.Sig = d.KID(), ""
+	msg, err := service.StatementMessage(st)
+	if err != nil {
+		panic(err)
+	}
+	if st.Sig, err = crypto.SignRaw(d.Priv, msg); err != nil {
+		panic(err)
+	}
+	return st
 }
 
 // SessionProof makes the session proof for a pin session.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hostryhq/svc-identity/internal/crypto"
 	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/service"
 )
@@ -24,7 +25,7 @@ func (w *World) SeedWorld(ctx context.Context, name string) error {
 		name = g.World
 	}
 	switch name {
-	case "base", "otp-challenge-pending", "session-open", "device-revoked", "device-drained", "pin-reset-authorised", "pin-locked", "co-owner",
+	case "base", "otp-challenge-pending", "session-open", "device-revoked", "device-drained", "pin-reset-authorised", "pin-locked", "co-owner", "device-key-recovered",
 		"approval-pending", "approval-approved", "owner-recovery-pending", "vendor-session-active", "support-session-active",
 		"vendor-approval-pending", "vendor-approval-approved", "vendor-grant-approved", "activation-code-pending", "device-unregistered", "org-no-owner", "owner-invited", "vendor-setup-pending":
 	default:
@@ -134,7 +135,8 @@ func (w *World) seedTenant(ctx context.Context, sd *service.Seeder, device bool)
 	if err := sd.Binding(ctx, BindingX, acct, DeviceID, ExampleKey, w.D.Clock.Now().Add(14*24*time.Hour)); err != nil {
 		return err
 	}
-	return sd.PackHistory(ctx, Org, DeviceID, 7, []string{Asha}, []string{"A7K"})
+	// Pack 7 listed Asha, who then held these two permissions (getPackGrants example).
+	return sd.PackHistory(ctx, Org, DeviceID, 7, []string{Asha}, []string{"A7K"}, map[string][]string{Asha: {"bill.void", "order.create"}})
 }
 
 func (w *World) seedVendor(ctx context.Context, sd *service.Seeder, priyaSetup bool) error {
@@ -166,6 +168,15 @@ func (w *World) delta(ctx context.Context, sd *service.Seeder, name string) erro
 	case "device-revoked":
 		w.D.Clock.Advance(10 * time.Minute) // revoked 13:15:11
 		return sd.RevokeDevice(ctx, Org, DeviceID, "lost", Vendor)
+	case "device-key-recovered":
+		// Device 4a5e lost its key; 4a5f (pos, same outlet, a key of its own) adopted it under recovery 4aa2, approved by Asha
+		// at 13:15:11. The old device's drain is not recorded, so the recovery is open.
+		w.D.Clock.Advance(10 * time.Minute)
+		if err := sd.Device(ctx, Org, service.SeedDevice{ID: NewDeviceID, Outlet: Outlet, Kind: "pos", Name: "Counter 2", KeyProt: "hardware", State: "active",
+			Key: crypto.ToJWK(&NewKey().PublicKey)}); err != nil {
+			return err
+		}
+		return sd.KeyLossRecovery(ctx, Org, RecoveryID, DeviceID, NewDeviceID, Asha)
 	case "device-drained":
 		w.D.Clock.Advance(10 * time.Minute)
 		if err := sd.RevokeDevice(ctx, Org, DeviceID, "lost", Vendor); err != nil {

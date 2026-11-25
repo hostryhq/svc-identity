@@ -50,7 +50,7 @@ func (s *Service) packPermissions(m *member, roles map[string]*role, outlet stri
 	return sortedKeys(set)
 }
 
-func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error) {
+func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (gen.OfflinePack, error) {
 	now := s.now()
 	roles, _, err := s.loadRoles(tx, d.TenantID)
 	if err != nil {
@@ -96,9 +96,10 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 			revoked = append(revoked, o.ID)
 		}
 	}
-	series := packSeries(d) // issued by tenancy (the registry is its), stored with the device
+	series := packSeries(d)        // issued by tenancy (the registry is its), stored with the device
+	books := s.manualBooks(ctx, d) // entry-only paper books of the outlet, from tenancy (A1.6 item 4)
 	sum := sha256.New()
-	_ = json.NewEncoder(sum).Encode([]any{members, revoked, series, d.State})
+	_ = json.NewEncoder(sum).Encode([]any{members, revoked, series, d.State, books})
 	digest := crypto.B64(sum.Sum(nil))
 
 	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
@@ -135,6 +136,9 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 	claims := gen.OfflinePackClaims{CatalogueVersion: CatalogueVersion, IdleLockMinutes: s.Cfg.IdleLockMinutes, IntentTableVersion: 1,
 		IssuedAt: now, Members: members, OfflineValidUntil: until, OrganisationId: d.TenantID, PackV: pv.Latest,
 		RevokedDeviceIds: revoked, Series: series}
+	if len(books) > 0 {
+		claims.ManualBooks = &books
+	}
 	claims.Device.DeviceId, claims.Device.Kind, claims.Device.OutletId = d.ID, gen.DeviceKind(d.Kind), d.OutletID
 	claims.Device.PublicKey = gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}
 	for _, k := range s.Tokens.JWKS(false) {
@@ -179,7 +183,7 @@ func (s *Service) GetDeviceOfflinePack(ctx context.Context, id string) (gen.Offl
 		if err := put(tx, kDevice, pr.TenantID, id, d, keys{k1: d.OutletID}); err != nil {
 			return err
 		}
-		out, err = s.buildPack(tx, d)
+		out, err = s.buildPack(ctx, tx, d)
 		return err
 	})
 	return out, err

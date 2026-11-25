@@ -2242,6 +2242,9 @@ type OfflinePackClaims struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
 
+	// ManualBooks The active paper bill books of the device outlet (tenancy `listOutletManualBookSeries`), entry-only. A device refuses to record a typed number whose code is in neither `series` nor here. Absent or empty when the outlet has none.
+	ManualBooks *[]PackManualBook `json:"manual_books,omitempty"`
+
 	// Members Members allowed at the outlet.
 	Members []PackMember `json:"members"`
 
@@ -2484,6 +2487,19 @@ type PackHistoryVerdict struct {
 	SeriesIssued bool `json:"series_issued"`
 }
 
+// PackManualBook A registered paper bill book the device may type pages from (ADR-0014 A1.6 item 4). Typed, never allocated.
+type PackManualBook struct {
+	// Code The book's own prefix, 1 to 6 capitals and digits, unique per GSTIN.
+	//
+	// Example: BKB
+	Code string `json:"code"`
+
+	// TaxRegistrationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	TaxRegistrationId Id `json:"tax_registration_id"`
+}
+
 // PackMember A member usable at the device outlet. Verifier fields appear only for device kinds that offer PIN login.
 type PackMember struct {
 	// DisplayName Display name; no phone number or account id.
@@ -2530,7 +2546,7 @@ type PackMember struct {
 // Example: active
 type PackMemberStatus string
 
-// PackSeries A document-series code given to the device (ADR-0003 section 1a).
+// PackSeries A document-series code given to the device (ADR-0003 section 1a). A billing device holds an invoice series and a `credit_note` series (tenancy `issueDocumentSeries`), and one entry-only `manual_book` row for every active paper bill book of its outlet, listed apart in `manual_books` (typed, never allocated; sync/protocol-v1.md, Manual-book entries).
 type PackSeries struct {
 	// Code Series code, unique per tax registration.
 	//

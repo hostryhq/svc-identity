@@ -53,6 +53,9 @@ const (
 	Support   = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a68"
 	Appr      = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6d"
 	Activ     = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a75"
+	// NewDeviceID adopted the key-lost device DeviceID under RecoveryID (the device-key-recovered world).
+	NewDeviceID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f"
+	RecoveryID  = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4aa2"
 
 	// Ravi's own session, for the worlds in which he is the caller.
 	RaviSession = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"

@@ -46,6 +46,20 @@ func ApprovalProofMessage(actionHash, did, mid string, packV, pinV int) string {
 	return strings.Join([]string{"approval", actionHash, did, mid, strconv.Itoa(packV), strconv.Itoa(pinV)}, "|")
 }
 
+// ApprovalBound are the fields of the approval record that section 8 binds into the action proof besides the action
+// hash: approval id, permission, target, requester, time and reason (ADR-0005 A3.1 check, ProofVerification kind approval).
+type ApprovalBound struct {
+	ApprovalID, Permission, Target, Requester, Reason string
+	ApprovedAt                                        time.Time
+}
+
+// ApprovalProofMessageBound is ApprovalProofMessage extended with the bound record fields. Free text is quoted so a
+// separator inside it cannot move a field boundary. The shell builds the same message.
+func ApprovalProofMessageBound(actionHash, did, mid string, packV, pinV int, b ApprovalBound) string {
+	return strings.Join([]string{ApprovalProofMessage(actionHash, did, mid, packV, pinV), b.ApprovalID, b.Permission, strconv.Quote(b.Target),
+		b.Requester, canonTime(b.ApprovedAt), strconv.Quote(b.Reason)}, "|")
+}
+
 // Proof computes the proof for a message with a PIN-derived proof key.
 func Proof(proofKey []byte, msg string) string {
 	m := hmac.New(sha256.New, proofKey)
@@ -597,6 +611,9 @@ func (s *Service) VerifyProof(ctx context.Context, in gen.ProofVerification) (ge
 	if in.Kind == gen.ProofVerificationKindApproval && in.ActionHash == nil {
 		return gen.ProofVerdict{}, errInvalid("action_hash", "required")
 	}
+	if in.Kind == gen.ProofVerificationKindApproval && in.ApprovalId != nil && (in.Permission == nil || in.RequesterId == nil || in.ApprovedAt == nil) {
+		return gen.ProofVerdict{}, errInvalid("approval_id", "incomplete_record")
+	}
 	verdict := gen.ProofVerdict{Label: gen.Unverified}
 	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
 		m, err := get[member](tx, kMember, pr.TenantID, in.MemberId)
@@ -665,6 +682,13 @@ func (s *Service) VerifyProof(ctx context.Context, in gen.ProofVerification) (ge
 			msg = SessionProofMessage(*in.SessionId, in.DeviceId, m.ID, in.PackV, in.PinV, *in.OpenedAt)
 		} else {
 			msg = ApprovalProofMessage(*in.ActionHash, in.DeviceId, m.ID, in.PackV, in.PinV)
+			if in.ApprovalId != nil { // the record's own fields are bound too
+				b := ApprovalBound{ApprovalID: *in.ApprovalId, Permission: deref(in.Permission), Target: deref(in.Target), Requester: deref(in.RequesterId), Reason: deref(in.Reason)}
+				if in.ApprovedAt != nil {
+					b.ApprovedAt = *in.ApprovedAt
+				}
+				msg = ApprovalProofMessageBound(*in.ActionHash, in.DeviceId, m.ID, in.PackV, in.PinV, b)
+			}
 		}
 		if crypto.Equal(Proof(key, msg), in.Proof) {
 			verdict = gen.ProofVerdict{Label: gen.Verified, Valid: true}

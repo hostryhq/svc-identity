@@ -111,6 +111,31 @@ func (c *Client) once(ctx context.Context, tenant, key string, body tenancy.Issu
 		})
 }
 
+// ManualBooks lists the active paper bill books of an outlet.
+func (c *Client) ManualBooks(ctx context.Context, tenant, outlet string) ([]service.ManualBook, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	tok, err := c.signer.Sign(Audience, tenant)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.c.ListOutletManualBookSeriesWithResponse(ctx, outlet, func(_ context.Context, r *http.Request) error {
+		r.Header.Set(auth.ServiceTokenHeader, tok)
+		return nil
+	})
+	if err != nil || resp.JSON200 == nil {
+		return nil, unavailable()
+	}
+	out := make([]service.ManualBook, 0, len(resp.JSON200.Items))
+	for _, b := range resp.JSON200.Items {
+		if string(b.Status) != "active" {
+			continue
+		}
+		out = append(out, service.ManualBook{Code: b.Code, RegistrationID: b.TaxRegistrationId})
+	}
+	return out, nil
+}
+
 func unavailable() error {
 	return apperr.New(apperr.Unavailable, "tenancy.unavailable", "the tenancy service could not be reached; try again")
 }

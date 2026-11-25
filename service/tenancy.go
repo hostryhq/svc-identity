@@ -18,6 +18,28 @@ type Tenancy interface {
 	// exist in the tenant, ErrRegistrationUnverified when the outlet's tax registration is not verified,
 	// and an apperr (rate limited or unavailable) otherwise.
 	IssueSeries(ctx context.Context, tenant, outlet, device string, docTypes []string, state string) ([]SeriesCode, error)
+	// ManualBooks lists the active paper bill books of an outlet (listOutletManualBookSeries), entry-only.
+	ManualBooks(ctx context.Context, tenant, outlet string) ([]ManualBook, error)
+}
+
+// ManualBook is a registered paper bill book of an outlet.
+type ManualBook struct{ Code, RegistrationID string }
+
+// manualBooks are the books carried in a billing device's pack. A failed lookup leaves them out of this pack
+// (the next fetch carries them); it never fails the pack.
+func (s *Service) manualBooks(ctx context.Context, d *device) []gen.PackManualBook {
+	if s.Tenancy == nil || billingFor(d.Kind) == "none" {
+		return nil
+	}
+	bs, err := s.Tenancy.ManualBooks(ctx, d.TenantID, d.OutletID)
+	if err != nil {
+		return nil
+	}
+	out := make([]gen.PackManualBook, 0, len(bs))
+	for _, b := range bs {
+		out = append(out, gen.PackManualBook{Code: b.Code, TaxRegistrationId: b.RegistrationID})
+	}
+	return out
 }
 
 // SeriesCode is one issued series of a device.
@@ -36,7 +58,8 @@ var (
 )
 
 // DefaultSeriesDocTypes are the document types a billing device is issued a series for.
-var DefaultSeriesDocTypes = []string{"tax_invoice"}
+// A billing device gets an invoice series and a credit_note series as a pair (tenancy 422 series.credit_note_required otherwise).
+var DefaultSeriesDocTypes = []string{"tax_invoice", "credit_note"}
 
 func (s *Service) seriesDocTypes() []string {
 	if len(s.Cfg.SeriesDocTypes) > 0 {
