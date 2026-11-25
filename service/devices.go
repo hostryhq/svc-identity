@@ -26,6 +26,8 @@ type activationDoc struct {
 	Expires  time.Time `json:"expires"`
 	UsedBy   string    `json:"used_by,omitempty"` // device id
 	UsedKey  string    `json:"used_key,omitempty"`
+	Key      string    `json:"key,omitempty"` // storage key (MAC of the code), so the owner can withdraw it by id
+	Revoked  bool      `json:"revoked,omitempty"`
 }
 
 type revocationDoc struct {
@@ -80,14 +82,54 @@ func (s *Service) CreateActivationCode(ctx context.Context, in gen.CreateActivat
 	}
 	now := s.now()
 	code := s.Rand.Alphabet(8, crypto.CodeAlphabet)
-	doc := activationDoc{ID: string(s.NewID()), TenantID: p.TenantID, OutletID: in.OutletId, Kind: string(in.Kind), By: p.Subject, Expires: now.Add(s.Cfg.ActivationTTL)}
+	cid := crypto.MAC(s.Cfg.MACKey, "activation", code)
+	doc := activationDoc{ID: string(s.NewID()), Key: cid, TenantID: p.TenantID, OutletID: in.OutletId, Kind: string(in.Kind), By: p.Subject, Expires: now.Add(s.Cfg.ActivationTTL)}
 	err := s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
-		if err := put(tx, kActivation, repository.Global, crypto.MAC(s.Cfg.MACKey, "activation", code), doc, keys{k1: doc.ID}); err != nil {
+		if err := put(tx, kActivation, repository.Global, cid, doc, keys{k1: doc.ID}); err != nil {
 			return err
 		}
 		return s.audit(tx, p.TenantID, auditDoc{Action: "device.activation_code.created", ActorKind: "member", ActorLbl: p.Subject, Outcome: "succeeded", Target: in.OutletId, Device: p.DeviceID})
 	})
 	return gen.ActivationCode{Id: doc.ID, Code: code, OutletId: in.OutletId, Kind: in.Kind, ExpiresAt: doc.Expires}, err
+}
+
+// RevokeActivationCode withdraws an unused activation code of the caller's organisation, for a code
+// whose reply was lost (idempotency.replay_secret: the code is not stored, so nobody holds it and it
+// would stay live for its 10 minutes). The holder of device.activation_code.create for the code's
+// outlet may do it. A code already redeemed is refused (revoke the device instead); revoking twice
+// is a no-op. Another organisation's code, or an unknown id, is 404.
+//
+// No route carries this yet: the contract has no list or revoke operation for activation codes (spec
+// request in the Phase 2 report). The service operation exists so the route is only wiring.
+func (s *Service) RevokeActivationCode(ctx context.Context, id string) error {
+	p, ok := principal(ctx)
+	if !ok {
+		return errUnauth()
+	}
+	return s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
+		docs, err := find[activationDoc](tx, kActivation, repository.Global, id)
+		if err != nil {
+			return err
+		}
+		if len(docs) != 1 || docs[0].TenantID != p.TenantID || docs[0].Key == "" {
+			return errNotFound()
+		}
+		ac := docs[0]
+		if err := auth.Require(ctx, "device.activation_code.create", ac.OutletID); err != nil {
+			return err
+		}
+		if ac.UsedBy != "" {
+			return apperr.New(apperr.Conflict, "activation_code_used", "the activation code was already used; revoke the device instead")
+		}
+		if ac.Revoked {
+			return nil
+		}
+		ac.Revoked, ac.Expires = true, s.now()
+		if err := put(tx, kActivation, repository.Global, ac.Key, ac, keys{k1: ac.ID}); err != nil {
+			return err
+		}
+		return s.audit(tx, p.TenantID, auditDoc{Action: "device.activation_code.revoked", ActorKind: "member", ActorLbl: p.Subject, Outcome: "succeeded", Target: ac.OutletID, Device: p.DeviceID})
+	})
 }
 
 // errDeviceUnavailable is the neutral refusal for a device id that already exists in any tenant or

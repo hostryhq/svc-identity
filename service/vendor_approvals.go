@@ -376,7 +376,12 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 		if err != nil || u == nil {
 			return notFoundOr(err)
 		}
-		reissue := grantKind(a.Kind) && a.effective(now) == "approved" && a.Approver == u.ID
+		// Re-issue (security re-review, replay_secret (a)): the approving reply carries a secret (the grant, or the
+		// second half of a sign-in code) that is never stored, so a lost reply is recovered by the same approver
+		// approving again, with a fresh TOTP, while the request is still open. A sign-in code is replaced, so the lost
+		// one stops working.
+		reissue := a.Approver == u.ID && ((grantKind(a.Kind) && a.effective(now) == "approved") ||
+			(a.Kind == "sign_in_code" && a.State == "approved" && !a.Used && now.Before(a.ExpiresAt)))
 		switch {
 		case a.effective(now) != "pending" && !reissue:
 			return approvalConflict("approval_not_pending")
@@ -413,7 +418,7 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 			if a.FirstHalf, err = crypto.Seal(s.Rand, s.Cfg.TOTPKey, []byte(code[:4])); err != nil {
 				return err
 			}
-			a.CodeUntil = now.Add(s.Cfg.SignInCodeTTL)
+			a.CodeUntil, a.Claimed, a.Attempts = now.Add(s.Cfg.SignInCodeTTL), false, 0
 			out.CodeHalf = &gen.CodeHalf{Half: code[4:], Position: gen.Second}
 		case "owner_recovery":
 			a.CompletesAt = now.Add(s.Cfg.RecoveryDelay)

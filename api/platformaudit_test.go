@@ -3,6 +3,9 @@ package api_test
 import (
 	"encoding/base64"
 	"encoding/json"
+	"regexp"
+
+	"github.com/hostryhq/svc-identity/service"
 	"strings"
 	"testing"
 	"time"
@@ -89,6 +92,8 @@ func dateOf(y int, m time.Month, d int) openapi_types.Date {
 	return openapi_types.Date{Time: time.Date(y, m, d, 0, 0, 0, 0, time.UTC)}
 }
 
+var subjectHashRE = regexp.MustCompile(`^[0-9a-f]{64}$`) // A2.6: lower-case hex, no prefix
+
 func jwtPayload(t *testing.T, tok string) map[string]any {
 	t.Helper()
 	parts := strings.Split(tok, ".")
@@ -149,7 +154,7 @@ func TestGrantKindApprovalsCarryAGrantAndLapse(t *testing.T) {
 	}
 	claims := jwtPayload(t, dec.Grant.Token)
 	if claims["typ"] != "vendor_approval" || claims["realm"] != "vendor" || claims["kind"] != "org_suspend" || claims["org"] != org.String() ||
-		claims["requester"] != admin.id || claims["approver"] != second.id || claims["sub"] != ap.Id || !strings.HasPrefix(claims["subject_hash"].(string), "sha256:") {
+		claims["requester"] != admin.id || claims["approver"] != second.id || claims["approval_id"] != ap.Id || claims["aud"] != "tenancy" || !subjectHashRE.MatchString(claims["subject_hash"].(string)) {
 		t.Fatalf("grant claims: %v", claims)
 	}
 	if dec.Grant.ExpiresAt.Sub(e.d.Clock.Now()) != 5*time.Minute {
@@ -188,7 +193,7 @@ func TestGrantKindApprovalsCarryAGrantAndLapse(t *testing.T) {
 	rule.OrganisationId = strPtr(org.String())
 	e.expect(422, "", "POST", "/internal/v1/vendor/approvals", admin.tok, rule, admin.h(e)...)
 	c5, tdec := decide(second, tp.Id)
-	if c5 != 200 || tdec.Grant == nil || jwtPayload(t, tdec.Grant.Token)["org"] != nil {
+	if c5 != 200 || tdec.Grant == nil || jwtPayload(t, tdec.Grant.Token)["org"] != service.PlatformOrg || jwtPayload(t, tdec.Grant.Token)["aud"] != "billing" { // O2-9 (provisional): org is "platform"
 		t.Fatalf("tax rule decision: %d %+v", c5, tdec)
 	}
 }
