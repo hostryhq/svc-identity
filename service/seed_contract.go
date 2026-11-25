@@ -38,6 +38,11 @@ func (sd *Seeder) Device(ctx context.Context, tenant string, d SeedDevice) error
 		for st, seq := range d.DrainedThrough {
 			doc.DrainedThr = append(doc.DrainedThr, stream{Stream: st, Seq: seq})
 		}
+		if b, err := s.brandFor(ctx, tenant, d.Outlet); err == nil {
+			doc.BrandID = b
+		} else if d.State == "active" {
+			return err
+		}
 		if d.State == "active" && s.Tenancy != nil {
 			series, unverified, err := s.issueSeriesFor(ctx, tenant, d.Outlet, d.ID, d.Kind)
 			if err != nil {
@@ -341,6 +346,19 @@ func (sd *Seeder) OwnerCount(ctx context.Context, tenant string, n int) error {
 	s := sd.s
 	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
 		return put(tx, kOwnerCount, repository.Global, tenant, ownerCount{N: n}, keys{})
+	})
+}
+
+// ClearDeviceBrand empties a device's brand, as a row created before ADR-0014 A3.4 has it (backfill tests).
+func (sd *Seeder) ClearDeviceBrand(ctx context.Context, tenant, deviceID string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		d, err := get[device](tx, kDevice, tenant, deviceID)
+		if err != nil || d == nil {
+			return notFoundOr(err)
+		}
+		d.BrandID = ""
+		return put(tx, kDevice, tenant, deviceID, d, keys{k1: d.OutletID})
 	})
 }
 

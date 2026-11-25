@@ -1116,7 +1116,7 @@ func (e ListAuditEntriesParamsActorKind) Valid() bool {
 
 // ActivateDevice Activate a new device with a code. No OTP is spent and the manager session never touches the device.
 type ActivateDevice struct {
-	// ActivationCode The code from createActivationCode.
+	// ActivationCode The code from createActivationCode, or a recovery code from createDeviceRecoveryCode (then the new device takes the old device's outlet and kind, the old device becomes revoked with reason key_lost and `recovery` is present in the answer).
 	//
 	// Example: 7QK3M9XD
 	ActivationCode string `json:"activation_code"`
@@ -1718,14 +1718,17 @@ type DeviceActivation struct {
 
 	// OfflinePack A signed offline pack. Clients verify jws and use only its payload.
 	OfflinePack OfflinePack `json:"offline_pack"`
+
+	// Recovery Present only when the code was a recovery code: the record that ties the new device to the old one (state open).
+	Recovery *DeviceRecovery `json:"recovery,omitempty"`
 }
 
-// DeviceCredential The identity-signed credential of a device as the offline pack carries it (ADR-0005 A3.2 row 1). `not_after` is not part of this answer; the gateway ignores it.
+// DeviceCredential The identity-signed credential of a device as the offline pack carries it (ADR-0005 A3.2 row 1). `not_after` is not part of this answer; the gateway ignores it. `brand_id` is always present (ADR-0014 A3.4).
 type DeviceCredential struct {
-	// BrandId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	// BrandId Brand of the outlet, read from tenancy when the device was activated, stored on the device row and signed into the credential; never re-read (ADR-0014 A3.4). The gateway caches the credential with no expiry and judges a device's stream binding from it, not from a tenancy call.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-	BrandId *Id `json:"brand_id,omitempty"`
+	BrandId Id `json:"brand_id"`
 
 	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
@@ -2203,12 +2206,22 @@ type OfflinePackClaims struct {
 	// Example: 1
 	CatalogueVersion int `json:"catalogue_version"`
 
-	// Device The device's own credential.
+	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id` and `kind` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4).
 	Device struct {
+		// BrandId Brand of the outlet, read from tenancy at activation and fixed for the device's life (ADR-0014 A3.4).
+		//
+		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+		BrandId Id `json:"brand_id"`
+
 		// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 		//
 		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 		DeviceId Id `json:"device_id"`
+
+		// Kid Key id of the device's own credential, the one the gateway holds for `device_id` (one key per device id for life, ADR-0002 S7). A seal, endorsement or drain statement the device makes names this `kid`.
+		//
+		// Example: dev-4a5e-1
+		Kid string `json:"kid"`
 
 		// Kind Device kind (ADR-0005 section 4).
 		//
@@ -2921,7 +2934,7 @@ type RecordDrain struct {
 	// Series The last number per series, copied from the device-signed statement (ADR-0005 A3.3 item 5). Must be exactly the series identity issued to the device (422 drain.series_mismatch, vendor alert, nothing recorded). Empty only for a device that never held a series (kds, hub).
 	Series *[]DrainSeries `json:"series,omitempty"`
 
-	// Statement The device-signed list of everything a revoked device holds and its last document numbers (ADR-0005 A3.3, domain tag `hostry-drain-v1`). Ordinary drain: `by` = `origin`, signed with the revoked device's key. Key loss: `by` = the adopting device, `rec` = the recovery id, signed with the new key.
+	// Statement The device-signed drain statement the report rests on. `series` must list exactly the series identity issued to the device (a billing device holds a pair: its tax-invoice series and its credit-note series), each with the statement's own number.
 	Statement *DrainStatement `json:"statement,omitempty"`
 }
 
@@ -2931,6 +2944,39 @@ type RecoveryCancellation struct {
 	//
 	// Example: Not requested by me.
 	Reason *string `json:"reason,omitempty"`
+}
+
+// RecoveryCode A key-loss recovery code; the code itself is shown once (ADR-0002 A1.3 item 2).
+type RecoveryCode struct {
+	// Code 8 characters from a 32-symbol alphabet (40 bits), 10 minutes, single use; redeemed at activateDevice.
+	//
+	// Example: 7QK3M9XD
+	Code string `json:"code"`
+
+	// ExpiresAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	ExpiresAt Timestamp `json:"expires_at"`
+
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	Id Id `json:"id"`
+
+	// Kind Kind the new device takes (the old device's).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// OldDeviceId The device that lost its key; the code is bound to it.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OldDeviceId Id `json:"old_device_id"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OutletId Id `json:"outlet_id"`
 }
 
 // RefreshSession Rotate a refresh token. The proof is signed by the device key, so a copied token is useless elsewhere.
@@ -4077,6 +4123,9 @@ type SupportSessionConflict = Problem
 // SwitchOwnerRole RFC 9457 problem details. `type` is a stable URI per error kind.
 type SwitchOwnerRole = Problem
 
+// TenancyUnavailable RFC 9457 problem details. `type` is a stable URI per error kind.
+type TenancyUnavailable = Problem
+
 // TooManyRequests RFC 9457 problem details. `type` is a stable URI per error kind.
 type TooManyRequests = Problem
 
@@ -4544,6 +4593,15 @@ type ListDevicesParams struct {
 
 // RegisterDeviceParams defines parameters for RegisterDevice.
 type RegisterDeviceParams struct {
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
+	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
+}
+
+// CreateDeviceRecoveryCodeParams defines parameters for CreateDeviceRecoveryCode.
+type CreateDeviceRecoveryCodeParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
@@ -5110,6 +5168,9 @@ type ServerInterface interface {
 	// GetDeviceOfflinePack Fetch a fresh offline pack (device token)
 	// (GET /v1/devices/{device_id}/offline-packs/latest)
 	GetDeviceOfflinePack(w http.ResponseWriter, r *http.Request, deviceId Id)
+	// CreateDeviceRecoveryCode Create a single-use recovery code for a device that lost its key
+	// (POST /v1/devices/{device_id}/recovery-codes)
+	CreateDeviceRecoveryCode(w http.ResponseWriter, r *http.Request, deviceId Id, params CreateDeviceRecoveryCodeParams)
 	// RevokeDevice Revoke a device (it keeps only the drain path)
 	// (PUT /v1/devices/{device_id}/revocation)
 	RevokeDevice(w http.ResponseWriter, r *http.Request, deviceId Id, params RevokeDeviceParams)
@@ -8514,6 +8575,79 @@ func (siw *ServerInterfaceWrapper) GetDeviceOfflinePack(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// CreateDeviceRecoveryCode operation middleware
+func (siw *ServerInterfaceWrapper) CreateDeviceRecoveryCode(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "device_id" -------------
+	var deviceId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "device_id", r.PathValue("device_id"), &deviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "device_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateDeviceRecoveryCodeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "Hostry-Approval" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Hostry-Approval")]; found {
+		var HostryApproval ApprovalToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Hostry-Approval", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Hostry-Approval", valueList[0], &HostryApproval, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Hostry-Approval", Err: err})
+			return
+		}
+
+		params.HostryApproval = &HostryApproval
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateDeviceRecoveryCode(w, r, deviceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RevokeDevice operation middleware
 func (siw *ServerInterfaceWrapper) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 
@@ -10170,6 +10304,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/vendor-jwks", wrapper.GetVendorJwks)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activation-codes", wrapper.ListActivationCodes)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/activation-codes", wrapper.CreateActivationCode)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/devices/{device_id}/recovery-codes", wrapper.CreateDeviceRecoveryCode)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/activation-codes/{activation_code_id}", wrapper.RevokeActivationCode)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/device-activations", wrapper.ActivateDevice)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/devices", wrapper.ListDevices)

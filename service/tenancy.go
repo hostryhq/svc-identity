@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+
+	"github.com/hostryhq/go-common/apperr"
 
 	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/repository"
@@ -20,6 +23,10 @@ type Tenancy interface {
 	IssueSeries(ctx context.Context, tenant, outlet, device string, docTypes []string, state string) ([]SeriesCode, error)
 	// ManualBooks lists the active paper bill books of an outlet (listOutletManualBookSeries), entry-only.
 	ManualBooks(ctx context.Context, tenant, outlet string) ([]ManualBook, error)
+	// OutletBrand reads the brand of an outlet (getStreamOwner; ADR-0014 A3.4 item 1). It returns
+	// ErrOutletUnknown for an outlet that does not exist in the tenant and an Unavailable apperr
+	// (code tenancy.unavailable) when tenancy cannot answer.
+	OutletBrand(ctx context.Context, tenant, outlet string) (string, error)
 }
 
 // ManualBook is a registered paper bill book of an outlet.
@@ -66,6 +73,101 @@ func (s *Service) seriesDocTypes() []string {
 		return s.Cfg.SeriesDocTypes
 	}
 	return DefaultSeriesDocTypes
+}
+
+// brandFor reads the outlet's brand from tenancy for a device being registered (ADR-0014 A3.4 item 1). It
+// is the same step as the series call and fails the registration when tenancy cannot answer: no credential
+// is issued without a brand. With no tenancy client (dev only) the brand stays empty and the credential
+// route answers 503 until it is filled.
+func (s *Service) brandFor(ctx context.Context, tenant, outlet string) (string, error) {
+	if s.Tenancy == nil {
+		return "", nil
+	}
+	b, err := s.Tenancy.OutletBrand(ctx, tenant, outlet)
+	switch {
+	case errors.Is(err, ErrOutletUnknown):
+		return "", errInvalid("outlet_id", "not_found")
+	case err != nil:
+		return "", err
+	}
+	return b, nil
+}
+
+// errBrandUnknown is the answer for a device row that has no brand yet (created before ADR-0014 A3.4): the
+// start-up backfill fills it; until then no credential or pack leaves.
+func errBrandUnknown() error {
+	return apperr.New(apperr.Unavailable, "tenancy.unavailable", "the device's brand is not known yet; try again")
+}
+
+// BackfillDeviceBrands fills the brand of device rows created before ADR-0014 A3.4, once per start-up
+// (ADR-0014 A3.4 item 2). It asks tenancy for each distinct outlet once, outside any transaction, and
+// returns how many rows still have no brand (tenancy unreachable or the outlet gone). It is safe to run
+// again and to run concurrently with registrations: a row is written only if it is still empty.
+func (s *Service) BackfillDeviceBrands(ctx context.Context) (remaining int, err error) {
+	if s.Tenancy == nil {
+		return 0, nil
+	}
+	type ref struct{ tenant, outlet string }
+	type entry struct{ tenant, id string }
+	var idx []entry
+	after := ""
+	for {
+		var recs []repository.Record
+		if err := s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+			var err error
+			recs, err = tx.List(kDeviceIdx, repository.Global, after, 200)
+			return err
+		}); err != nil {
+			return 0, err
+		}
+		for _, r := range recs {
+			var t struct {
+				TenantID string `json:"tenant_id"`
+			}
+			if json.Unmarshal(r.Doc, &t) == nil && t.TenantID != "" {
+				idx = append(idx, entry{t.TenantID, r.ID})
+			}
+			after = r.ID
+		}
+		if len(recs) < 200 {
+			break
+		}
+	}
+	brands := map[ref]string{}
+	for _, x := range idx {
+		var d *device
+		if err := s.Store.Tx(ctx, x.tenant, func(tx repository.Tx) error {
+			var err error
+			d, err = get[device](tx, kDevice, x.tenant, x.id)
+			return err
+		}); err != nil {
+			return remaining, err
+		}
+		if d == nil || d.BrandID != "" {
+			continue
+		}
+		k := ref{x.tenant, d.OutletID}
+		b, ok := brands[k]
+		if !ok {
+			var err error
+			if b, err = s.Tenancy.OutletBrand(ctx, x.tenant, d.OutletID); err != nil {
+				remaining++
+				continue
+			}
+			brands[k] = b
+		}
+		if err := s.Store.Tx(ctx, x.tenant, func(tx repository.Tx) error {
+			d, err := get[device](tx, kDevice, x.tenant, x.id)
+			if err != nil || d == nil || d.BrandID != "" {
+				return err
+			}
+			d.BrandID = b
+			return put(tx, kDevice, x.tenant, x.id, d, keys{k1: d.OutletID})
+		}); err != nil {
+			return remaining, err
+		}
+	}
+	return remaining, nil
 }
 
 // issueSeriesFor asks tenancy for the series of a billing device (pos: active, waiter: dormant). It

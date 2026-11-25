@@ -73,11 +73,14 @@ func (s *Service) GetDeviceCredential(ctx context.Context, id string) (gen.Devic
 		if err != nil || d == nil {
 			return notFoundOr(err)
 		}
+		if d.BrandID == "" && s.Tenancy != nil { // not yet filled by the start-up backfill (ADR-0014 A3.4 item 2)
+			return errBrandUnknown()
+		}
 		pub, err := PubX962(d.Key)
 		if err != nil {
 			return err
 		}
-		out = gen.DeviceCredential{DeviceId: d.ID, TenantId: d.TenantID, OutletId: d.OutletID, Kind: gen.DeviceKind(d.Kind), Kid: DeviceKID(d.ID), Pub: pub}
+		out = gen.DeviceCredential{DeviceId: d.ID, TenantId: d.TenantID, OutletId: d.OutletID, BrandId: d.BrandID, Kind: gen.DeviceKind(d.Kind), Kid: DeviceKID(d.ID), Pub: pub}
 		if d.Recovers != "" {
 			r := d.Recovers
 			out.Recovers = &r
@@ -161,11 +164,7 @@ func (s *Service) GetDeviceRecovery(ctx context.Context, oldDeviceID string) (ge
 		if err != nil || r == nil {
 			return notFoundOr(err)
 		}
-		state := gen.Open
-		if r.Closed {
-			state = gen.Closed
-		}
-		out = gen.DeviceRecovery{Id: r.ID, OldDeviceId: r.OldDeviceID, NewDeviceId: r.NewDeviceID, ApproverId: r.ApproverID, RecoveredAt: r.RecoveredAt, State: state}
+		out = recoveryDTO(r)
 		return nil
 	})
 	return out, err

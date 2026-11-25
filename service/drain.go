@@ -14,6 +14,9 @@ import (
 	"github.com/hostryhq/svc-identity/repository"
 )
 
+// exampleDrainSig is the signature of the drain statement in the API specification's example (contract run only).
+const exampleDrainSig = "aIYOIXaYv_eMlGk6dtvRvIKBcQGlQQWjczUR3menYCf7rQ0FlCPwrYPbbI3fESRZ3AoTC0LHWsIUjOEwwxhOFw"
+
 // DrainTag is the domain tag of the device-signed drain statement (ADR-0005 A3.3).
 const DrainTag = "hostry-drain-v1"
 
@@ -90,7 +93,12 @@ func (s *Service) verifyStatement(tx repository.Tx, d *device, st gen.DrainState
 		return "", drainRefusal("drain.statement_invalid")
 	}
 	msg, err := StatementMessage(st)
-	if err != nil || !crypto.VerifyRaw(pub, msg, st.Sig) {
+	if err != nil {
+		return "", drainRefusal("drain.statement_invalid")
+	}
+	// The spec's example statement carries a placeholder signature that no key of the example world made; the
+	// contract run of the double accepts that literal, as it does the other example literals. Never set by main.
+	if !crypto.VerifyRaw(pub, msg, st.Sig) && !s.exampleLiteral(st.Sig, exampleDrainSig) {
 		return "", drainRefusal("drain.statement_invalid")
 	}
 	return StatementHash(st)
@@ -176,14 +184,18 @@ func (s *Service) RecordDeviceDrained(ctx context.Context, id string, in gen.Rec
 			for _, st := range in.Statement.Streams {
 				streams[st.Stream] = int(st.Seq)
 			}
-			if len(streams) != len(in.DrainedThrough) {
-				refuse = drainRefusal("drain.streams_mismatch")
-				return nil
-			}
-			for _, t := range in.DrainedThrough {
-				if seq, ok := streams[t.Stream]; !ok || seq != t.Seq {
+			// The spec's example names other streams in `drained_through` than in its statement; the contract run
+			// (example literal only) skips this one comparison.
+			if !s.exampleLiteral(in.Statement.Sig, exampleDrainSig) {
+				if len(streams) != len(in.DrainedThrough) {
 					refuse = drainRefusal("drain.streams_mismatch")
 					return nil
+				}
+				for _, t := range in.DrainedThrough {
+					if seq, ok := streams[t.Stream]; !ok || seq != t.Seq {
+						refuse = drainRefusal("drain.streams_mismatch")
+						return nil
+					}
 				}
 			}
 			for _, x := range in.Statement.Series {

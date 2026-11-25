@@ -138,6 +138,21 @@ func serve(ctx context.Context, cfg *config) error {
 	} else {
 		log.Warn("HOSTRY_NATS_URL is not set: events stay in the outbox and are not relayed")
 	}
+	go func() { // one-off backfill of device rows from before ADR-0014 A3.4: retried until tenancy has answered for every row
+		for wait := 2 * time.Second; ; wait = min(wait*2, time.Minute) {
+			left, err := res.Service.BackfillDeviceBrands(ctx)
+			if err == nil && left == 0 {
+				log.Info("device brand backfill complete")
+				return
+			}
+			log.Warn("device brand backfill incomplete; credentials and packs of unfilled devices answer 503", "remaining", left, "error", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+		}
+	}()
 	go func() { // owner recoveries complete on identity's clock
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()

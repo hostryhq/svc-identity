@@ -139,7 +139,11 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	if len(books) > 0 {
 		claims.ManualBooks = &books
 	}
+	if d.BrandID == "" && s.Tenancy != nil { // a row from before ADR-0014 A3.4 that the backfill has not reached
+		return gen.OfflinePack{}, errBrandUnknown()
+	}
 	claims.Device.DeviceId, claims.Device.Kind, claims.Device.OutletId = d.ID, gen.DeviceKind(d.Kind), d.OutletID
+	claims.Device.BrandId, claims.Device.Kid = d.BrandID, DeviceKID(d.ID)
 	claims.Device.PublicKey = gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}
 	for _, k := range s.Tokens.JWKS(false) {
 		claims.IdentityPublicKeys = append(claims.IdentityPublicKeys, gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: k.Key.X, Y: k.Key.Y, Kid: k.Kid, Alg: gen.ES256, Use: gen.Sig})

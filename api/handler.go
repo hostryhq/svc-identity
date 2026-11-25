@@ -95,6 +95,10 @@ func (h *Handler) CreateActivationCode(w http.ResponseWriter, r *http.Request, _
 	})
 }
 
+func (h *Handler) CreateDeviceRecoveryCode(w http.ResponseWriter, r *http.Request, deviceId gen.Id, _ gen.CreateDeviceRecoveryCodeParams) {
+	call(w, r, http.StatusCreated, func() (gen.RecoveryCode, error) { return h.s.CreateDeviceRecoveryCode(r.Context(), deviceId) })
+}
+
 func (h *Handler) ActivateDevice(w http.ResponseWriter, r *http.Request, _ gen.ActivateDeviceParams) {
 	do(w, r, http.StatusCreated, func(in gen.ActivateDevice) (gen.DeviceActivation, error) {
 		return h.s.ActivateDevice(r.Context(), in, h.clientAddr(r))

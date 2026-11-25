@@ -120,6 +120,7 @@ type device struct {
 	ID         string     `json:"id"`
 	TenantID   string     `json:"tenant_id"`
 	OutletID   string     `json:"outlet_id"`
+	BrandID    string     `json:"brand_id,omitempty"` // read from tenancy at activation, signed into the credential, never re-read (ADR-0014 A3.4)
 	Kind       string     `json:"kind"`
 	Name       string     `json:"name"`
 	State      string     `json:"state"` // active, revoked, drained, wiped, lost

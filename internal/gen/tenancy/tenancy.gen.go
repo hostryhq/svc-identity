@@ -99,6 +99,24 @@ func (e ManualBookSeriesStatus) Valid() bool {
 	}
 }
 
+// Defines values for StreamOwnerKind.
+const (
+	Brand  StreamOwnerKind = "brand"
+	Outlet StreamOwnerKind = "outlet"
+)
+
+// Valid indicates whether the value is a known member of the StreamOwnerKind enum.
+func (e StreamOwnerKind) Valid() bool {
+	switch e {
+	case Brand:
+		return true
+	case Outlet:
+		return true
+	default:
+		return false
+	}
+}
+
 // DocType Document type.
 //
 // Example: tax_invoice
@@ -318,6 +336,34 @@ type SeriesIssuance struct {
 	Items []DocumentSeries `json:"items"`
 }
 
+// StreamOwner The owner of an outlet or brand stream (ADR-0005 A3.2 row 8).
+type StreamOwner struct {
+	// BrandId The brand of the outlet (equal to stream_id for a brand stream).
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	BrandId *Id `json:"brand_id,omitempty"`
+
+	// Kind Which stream the id names.
+	//
+	// Example: outlet
+	Kind StreamOwnerKind `json:"kind"`
+
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OrganisationId Id `json:"organisation_id"`
+
+	// StreamId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	StreamId Id `json:"stream_id"`
+}
+
+// StreamOwnerKind Which stream the id names.
+//
+// Example: outlet
+type StreamOwnerKind string
+
 // Timestamp RFC 3339 instant in UTC.
 //
 // Example: 2026-11-24T13:05:11.120Z
@@ -451,6 +497,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /internal/v1/outlets/{outlet_id}/manual-book-series (the `ListOutletManualBookSeries` operationId).
 	ListOutletManualBookSeries(ctx context.Context, outletId Id, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetStreamOwner Which organisation owns an outlet or brand stream
+	//
+	// Sync gateway directory question (ADR-0005 A3.2 row 8): whether an outlet or brand id belongs to the token's tenant. 404 when it does not exist or belongs to another tenant. Found answers are cached without expiry. Also the outlet read of identity at device activation (ADR-0014 A3.4 item 1): for an outlet the answer carries its `brand_id`, which identity stores on the device row and signs into the credential. An outlet never changes brand, so the answer never changes.
+	//
+	// Corresponds with GET /internal/v1/stream-owners/{stream_id} (the `GetStreamOwner` operationId).
+	GetStreamOwner(ctx context.Context, streamId Id, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // IssueDocumentSeriesWithBody Issue series codes for a device
@@ -498,6 +551,23 @@ func (c *Client) IssueDocumentSeries(ctx context.Context, params *IssueDocumentS
 // Corresponds with GET /internal/v1/outlets/{outlet_id}/manual-book-series (the `ListOutletManualBookSeries` operationId).
 func (c *Client) ListOutletManualBookSeries(ctx context.Context, outletId Id, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListOutletManualBookSeriesRequest(c.Server, outletId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetStreamOwner Which organisation owns an outlet or brand stream
+//
+// Sync gateway directory question (ADR-0005 A3.2 row 8): whether an outlet or brand id belongs to the token's tenant. 404 when it does not exist or belongs to another tenant. Found answers are cached without expiry. Also the outlet read of identity at device activation (ADR-0014 A3.4 item 1): for an outlet the answer carries its `brand_id`, which identity stores on the device row and signs into the credential. An outlet never changes brand, so the answer never changes.
+//
+// Corresponds with GET /internal/v1/stream-owners/{stream_id} (the `GetStreamOwner` operationId).
+func (c *Client) GetStreamOwner(ctx context.Context, streamId Id, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetStreamOwnerRequest(c.Server, streamId)
 	if err != nil {
 		return nil, err
 	}
@@ -595,6 +665,40 @@ func NewListOutletManualBookSeriesRequest(server string, outletId Id) (*http.Req
 	return req, nil
 }
 
+// NewGetStreamOwnerRequest constructs an http.Request for the GetStreamOwner method
+func NewGetStreamOwnerRequest(server string, streamId Id) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stream_id", streamId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := "/internal/v1/stream-owners/" + pathParam0
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -665,6 +769,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /internal/v1/outlets/{outlet_id}/manual-book-series (the `ListOutletManualBookSeries` operationId).
 	ListOutletManualBookSeriesWithResponse(ctx context.Context, outletId Id, reqEditors ...RequestEditorFn) (*ListOutletManualBookSeriesResponse, error)
+
+	// GetStreamOwnerWithResponse Which organisation owns an outlet or brand stream
+	//
+	// Sync gateway directory question (ADR-0005 A3.2 row 8): whether an outlet or brand id belongs to the token's tenant. 404 when it does not exist or belongs to another tenant. Found answers are cached without expiry. Also the outlet read of identity at device activation (ADR-0014 A3.4 item 1): for an outlet the answer carries its `brand_id`, which identity stores on the device row and signs into the credential. An outlet never changes brand, so the answer never changes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /internal/v1/stream-owners/{stream_id} (the `GetStreamOwner` operationId).
+	GetStreamOwnerWithResponse(ctx context.Context, streamId Id, reqEditors ...RequestEditorFn) (*GetStreamOwnerResponse, error)
 }
 
 type IssueDocumentSeriesResponse struct {
@@ -812,6 +925,68 @@ func (r ListOutletManualBookSeriesResponse) ContentType() string {
 	return ""
 }
 
+type GetStreamOwnerResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StreamOwner
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *NotFound
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetStreamOwnerResponse) GetJSON200() *StreamOwner {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetStreamOwnerResponse) GetApplicationproblemJSON401() *Unauthorized {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetStreamOwnerResponse) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetStreamOwnerResponse) GetApplicationproblemJSON404() *NotFound {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetStreamOwnerResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetStreamOwnerResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetStreamOwnerResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetStreamOwnerResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // IssueDocumentSeriesWithBodyWithResponse Issue series codes for a device
 //
 // The service token names the tenant it acts for; it must equal the outlet's tenant. Identity is the only caller, at device activation or when billing is granted. **A billing device (pos, waiter) gets a pair in one transaction: a numbered invoice series (`tax_invoice`, or `bill_of_supply` or `plain_bill` by the registration kind) AND a `credit_note` series under the same registration and in the same state (soak finding F5).** A request with an invoice type and no `credit_note` is 422 `series.credit_note_required` and issues nothing; a `credit_note` alone is accepted (a device that already holds its invoice series). Both rows carry one `issued_at`; `tenancy.series.issued` is published once per series. Codes are issued once per device and registration, so a repeat returns the same pair. **`manual_book` is never issued here:** a paper book belongs to the registration and its outlets, not to a device (`registerManualBookSeries`); every billing device of a listed outlet receives the active books entry-only in its pack, and the sync gateway reads them from `listOutletManualBookSeries` (sync/protocol-v1.md, Manual-book entries).
@@ -855,6 +1030,21 @@ func (c *ClientWithResponses) ListOutletManualBookSeriesWithResponse(ctx context
 		return nil, err
 	}
 	return ParseListOutletManualBookSeriesResponse(rsp)
+}
+
+// GetStreamOwnerWithResponse Which organisation owns an outlet or brand stream
+//
+// Sync gateway directory question (ADR-0005 A3.2 row 8): whether an outlet or brand id belongs to the token's tenant. 404 when it does not exist or belongs to another tenant. Found answers are cached without expiry. Also the outlet read of identity at device activation (ADR-0014 A3.4 item 1): for an outlet the answer carries its `brand_id`, which identity stores on the device row and signs into the credential. An outlet never changes brand, so the answer never changes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /internal/v1/stream-owners/{stream_id} (the `GetStreamOwner` operationId).
+func (c *ClientWithResponses) GetStreamOwnerWithResponse(ctx context.Context, streamId Id, reqEditors ...RequestEditorFn) (*GetStreamOwnerResponse, error) {
+	rsp, err := c.GetStreamOwner(ctx, streamId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetStreamOwnerResponse(rsp)
 }
 
 // ParseIssueDocumentSeriesResponse parses an HTTP response from a IssueDocumentSeriesWithResponse call
@@ -941,6 +1131,53 @@ func ParseListOutletManualBookSeriesResponse(rsp *http.Response) (*ListOutletMan
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ManualBookSeriesPage
+		if err := runtime.JSONUnmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := runtime.JSONUnmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := runtime.JSONUnmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := runtime.JSONUnmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetStreamOwnerResponse parses an HTTP response from a GetStreamOwnerWithResponse call
+func ParseGetStreamOwnerResponse(rsp *http.Response) (*GetStreamOwnerResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetStreamOwnerResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StreamOwner
 		if err := runtime.JSONUnmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

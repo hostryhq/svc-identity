@@ -29,6 +29,8 @@ type activationDoc struct {
 	UsedKey  string    `json:"used_key,omitempty"`
 	Key      string    `json:"key,omitempty"` // storage key (MAC of the code), so the owner can withdraw it by id
 	Revoked  bool      `json:"revoked,omitempty"`
+	// OldDevice is set on a key-loss recovery code (ADR-0002 A1.3 item 2): the device that lost its key.
+	OldDevice string `json:"old_device,omitempty"`
 	// Created is when the code was made (absent on codes written before the list existed: the expiry
 	// less the activation lifetime stands in).
 	Created time.Time `json:"created,omitempty"`
@@ -191,7 +193,7 @@ func (s *Service) ListActivationCodes(ctx context.Context, p gen.ListActivationC
 		now := s.now()
 		var live []activationDoc
 		for i := range all {
-			if all[i].TenantID == pr.TenantID && all[i].state(now) == gen.ActivationCodeSummaryStatePending && scope.Contains(all[i].OutletID) {
+			if all[i].TenantID == pr.TenantID && all[i].OldDevice == "" && all[i].state(now) == gen.ActivationCodeSummaryStatePending && scope.Contains(all[i].OutletID) {
 				live = append(live, all[i])
 			}
 		}
@@ -320,6 +322,7 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 		return gen.DeviceActivation{}, refuse
 	}
 	var out gen.DeviceActivation
+	var recovery *gen.DeviceRecovery
 	err = s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
 		ac, err := s.activationFor(tx, in.ActivationCode)
 		if err != nil {
@@ -336,20 +339,157 @@ func (s *Service) ActivateDevice(ctx context.Context, in gen.ActivateDevice, cli
 				return errDeviceRevoked()
 			}
 			dev = d
+		} else if ac.OldDevice != "" {
+			if dev, recovery, err = s.redeemRecovery(ctx, tx, tenant, ac, in, key); err != nil {
+				return err
+			}
 		} else {
 			dev, err = s.createDevice(ctx, tx, tenant, ac.OutletID, ac.Kind, in.Name, string(in.KeyProtection), in.Id, key, "", ac.By, ac.ID)
 			if err != nil {
 				return err
 			}
 		}
+		if dev.Recovers != "" && recovery == nil { // a replay of a recovery activation answers the record again
+			r, err := s.recoveryOf(tx, tenant, dev.Recovers)
+			if err != nil {
+				return err
+			}
+			if r != nil {
+				dto := recoveryDTO(r)
+				recovery = &dto
+			}
+		}
 		pack, err := s.buildPack(ctx, tx, dev)
 		if err != nil {
 			return err
 		}
-		out = gen.DeviceActivation{Device: deviceDTO(dev), OfflinePack: pack}
+		out = gen.DeviceActivation{Device: deviceDTO(dev), OfflinePack: pack, Recovery: recovery}
 		return nil
 	})
 	return out, err
+}
+
+// errNotRecoverable is the 409 for a device that cannot be recovered: already revoked, drained or recovered.
+func errNotRecoverable() error {
+	return apperr.New(apperr.Conflict, "device_not_recoverable", "the device is already revoked, drained or recovered")
+}
+
+// CreateDeviceRecoveryCode creates the single-use recovery code of a device that lost its key (ADR-0002 A1.3
+// item 2): the format and limits of an activation code, bound to the old device id. A second code for the
+// same device replaces the first. Only a device that is not yet revoked can be recovered. Creation is rate
+// limited per outlet per day, like activation.
+func (s *Service) CreateDeviceRecoveryCode(ctx context.Context, oldID string) (gen.RecoveryCode, error) {
+	p, ok := principal(ctx)
+	if !ok {
+		return gen.RecoveryCode{}, errUnauth()
+	}
+	now := s.now()
+	var doc activationDoc
+	var code string
+	var refuse error
+	err := s.Store.Tx(ctx, p.TenantID, func(tx repository.Tx) error {
+		old, err := get[device](tx, kDevice, p.TenantID, oldID)
+		if err != nil || old == nil {
+			return notFoundOr(err)
+		}
+		if err := auth.Require(ctx, "device.recover", old.OutletID); err != nil {
+			return err
+		}
+		if old.State != "active" {
+			return errNotRecoverable()
+		}
+		if r, err := s.recoveryOf(tx, p.TenantID, oldID); err != nil || r != nil {
+			if err == nil {
+				err = errNotRecoverable()
+			}
+			return err
+		}
+		day, err := s.limitGet(tx, "recov:outlet:"+old.OutletID)
+		if err != nil {
+			return err
+		}
+		day.Times = prune(day.Times, now, 24*time.Hour)
+		if len(day.Times) >= s.Cfg.ActivationDay {
+			refuse = tooMany(24*time.Hour - now.Sub(day.Times[0]))
+			return nil
+		}
+		day.Times = append(day.Times, now)
+		if err := s.limitPut(tx, "recov:outlet:"+old.OutletID, day); err != nil {
+			return err
+		}
+		all, err := findK2[activationDoc](tx, kActivation, repository.Global, p.TenantID)
+		if err != nil {
+			return err
+		}
+		for i := range all { // the earlier code for this device lapses
+			if all[i].TenantID == p.TenantID && all[i].OldDevice == oldID && all[i].UsedBy == "" && !all[i].Revoked && all[i].Key != "" {
+				all[i].Revoked = true
+				if err := all[i].store(tx, all[i].Key); err != nil {
+					return err
+				}
+			}
+		}
+		code = s.Rand.Alphabet(8, crypto.CodeAlphabet)
+		cid := crypto.MAC(s.Cfg.MACKey, "activation", code)
+		doc = activationDoc{ID: string(s.NewID()), Key: cid, TenantID: p.TenantID, OutletID: old.OutletID, Kind: old.Kind, By: p.Subject,
+			Expires: now.Add(s.Cfg.ActivationTTL), Created: now, OldDevice: oldID}
+		if err := doc.store(tx, cid); err != nil {
+			return err
+		}
+		return s.audit(tx, p.TenantID, auditDoc{Action: "device.recovery_code.created", ActorKind: "member", ActorLbl: p.Subject, Outcome: "succeeded", Target: oldID, Device: p.DeviceID})
+	})
+	if err != nil {
+		return gen.RecoveryCode{}, err
+	}
+	if refuse != nil {
+		return gen.RecoveryCode{}, refuse
+	}
+	return gen.RecoveryCode{Id: doc.ID, Code: code, OldDeviceId: oldID, OutletId: doc.OutletID, Kind: gen.DeviceKind(doc.Kind), ExpiresAt: doc.Expires}, nil
+}
+
+// redeemRecovery is the one transaction of ADR-0002 A1.3 item 3: the old device is revoked with reason
+// key_lost (every effect of ADR-0005 section 4 item 1), a new device is registered at the same outlet with
+// the same kind (new id, new series, brand read from tenancy), the single-use recovery record is written and
+// the new device's credential carries `recovers`.
+func (s *Service) redeemRecovery(ctx context.Context, tx repository.Tx, tenant string, ac *activationDoc, in gen.ActivateDevice, key crypto.JWK) (*device, *gen.DeviceRecovery, error) {
+	old, err := get[device](tx, kDevice, tenant, ac.OldDevice)
+	if err != nil {
+		return nil, nil, err
+	}
+	if old == nil || old.State != "active" {
+		return nil, nil, errNotRecoverable()
+	}
+	if r, err := s.recoveryOf(tx, tenant, old.ID); err != nil || r != nil {
+		if err == nil {
+			err = errNotRecoverable()
+		}
+		return nil, nil, err
+	}
+	nd, err := s.createDevice(ctx, tx, tenant, old.OutletID, old.Kind, in.Name, string(in.KeyProtection), in.Id, key, old.AccountID, ac.By, ac.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	nd.Recovers = old.ID
+	if err := put(tx, kDevice, tenant, nd.ID, nd, keys{k1: nd.OutletID}); err != nil {
+		return nil, nil, err
+	}
+	rec := deviceRecovery{ID: string(s.NewID()), TenantID: tenant, OldDeviceID: old.ID, NewDeviceID: nd.ID, ApproverID: ac.By, RecoveredAt: s.now()}
+	if err := s.revokeDeviceWith(tx, old, "key_lost", ac.By, revocationDoc{TenantID: tenant, Type: "device", Subject: old.ID, Reason: "key_lost", Recovery: rec.ID}); err != nil {
+		return nil, nil, err
+	}
+	if err := put(tx, kDevRecov, tenant, rec.ID, rec, keys{k1: old.ID}); err != nil {
+		return nil, nil, err
+	}
+	dto := recoveryDTO(&rec)
+	return nd, &dto, nil
+}
+
+func recoveryDTO(r *deviceRecovery) gen.DeviceRecovery {
+	state := gen.Open
+	if r.Closed {
+		state = gen.Closed
+	}
+	return gen.DeviceRecovery{Id: r.ID, OldDeviceId: r.OldDeviceID, NewDeviceId: r.NewDeviceID, ApproverId: r.ApproverID, RecoveredAt: r.RecoveredAt, State: state}
 }
 
 func (s *Service) activationFor(tx repository.Tx, code string) (*activationDoc, error) {
@@ -382,6 +522,10 @@ func (s *Service) createDevice(ctx context.Context, tx repository.Tx, tenant, ou
 		if err == repository.ErrConflict { // a concurrent insert of the id, or the key is bound to an active device
 			return nil, apperr.New(apperr.Validation, "activation_code_invalid", "the device could not be registered")
 		}
+		return nil, err
+	}
+	// ADR-0014 A3.4 item 1: the brand is read in the same step as the series; no brand, no device.
+	if d.BrandID, err = s.brandFor(ctx, tenant, outlet); err != nil {
 		return nil, err
 	}
 	series, unverified, err := s.issueSeriesFor(ctx, tenant, outlet, id, kind)
@@ -598,6 +742,12 @@ func (s *Service) RevokeDevice(ctx context.Context, id string, in gen.RevokeDevi
 // revokeDeviceTx performs the revocation: state, key release, revocation feed, event, audit,
 // pin sessions ended. Shared by the tenant and the vendor operation.
 func (s *Service) revokeDeviceTx(tx repository.Tx, d *device, reason, by string) error {
+	return s.revokeDeviceWith(tx, d, reason, by, revocationDoc{TenantID: d.TenantID, Type: "device", Subject: d.ID, Reason: "revoked"})
+}
+
+// revokeDeviceWith is revokeDeviceTx with the feed row given (a key-loss recovery writes reason key_lost
+// and the recovery id, ADR-0005 A3.2 row 5).
+func (s *Service) revokeDeviceWith(tx repository.Tx, d *device, reason, by string, row revocationDoc) error {
 	now := s.now()
 	d.State, d.RevokedAt = "revoked", now
 	if err := put(tx, kDevice, d.TenantID, d.ID, d, keys{k1: d.OutletID}); err != nil {
@@ -609,7 +759,7 @@ func (s *Service) revokeDeviceTx(tx repository.Tx, d *device, reason, by string)
 	}{d.TenantID}, keys{k1: "revoked:" + d.ID}); err != nil {
 		return err
 	}
-	if err := s.addRevocationRow(tx, revocationDoc{TenantID: d.TenantID, Type: "device", Subject: d.ID, Reason: "revoked"}); err != nil {
+	if err := s.addRevocationRow(tx, row); err != nil {
 		return err
 	}
 	if err := s.emit(tx, d.TenantID, d.OutletID, "identity.device.revoked", d.ID, by, map[string]any{"device_id": d.ID, "reason": reason}); err != nil {

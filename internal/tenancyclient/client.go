@@ -136,6 +136,56 @@ func (c *Client) ManualBooks(ctx context.Context, tenant, outlet string) ([]serv
 	return out, nil
 }
 
+// OutletBrand reads the brand of an outlet (getStreamOwner, ADR-0014 A3.4 item 1). One bounded retry with
+// jitter on a transport failure or a 502, 503 or 504; a read, so a retry repeats nothing. An answer that
+// is not an outlet with a brand is unavailable, never a guess.
+func (c *Client) OutletBrand(ctx context.Context, tenant, outlet string) (string, error) {
+	var resp *tenancy.GetStreamOwnerResponse
+	for attempt := 0; attempt < 2; attempt++ {
+		var err error
+		resp, err = c.streamOwner(ctx, tenant, outlet)
+		if err == nil && resp.StatusCode() != http.StatusBadGateway && resp.StatusCode() != http.StatusServiceUnavailable && resp.StatusCode() != http.StatusGatewayTimeout {
+			break
+		}
+		resp = nil
+		if attempt == 0 {
+			select {
+			case <-time.After(time.Duration(50+rand.IntN(100)) * time.Millisecond):
+			case <-ctx.Done():
+				return "", unavailable()
+			}
+		}
+	}
+	if resp == nil {
+		return "", unavailable()
+	}
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		if resp.JSON200 == nil || string(resp.JSON200.Kind) != "outlet" || resp.JSON200.BrandId == nil || *resp.JSON200.BrandId == "" {
+			return "", unavailable()
+		}
+		return *resp.JSON200.BrandId, nil
+	case http.StatusNotFound:
+		return "", service.ErrOutletUnknown
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "", apperr.New(apperr.Internal, "tenancy.not_authorised", "")
+	}
+	return "", unavailable()
+}
+
+func (c *Client) streamOwner(ctx context.Context, tenant, outlet string) (*tenancy.GetStreamOwnerResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	tok, err := c.signer.Sign(Audience, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return c.c.GetStreamOwnerWithResponse(ctx, outlet, func(_ context.Context, r *http.Request) error {
+		r.Header.Set(auth.ServiceTokenHeader, tok)
+		return nil
+	})
+}
+
 func unavailable() error {
 	return apperr.New(apperr.Unavailable, "tenancy.unavailable", "the tenancy service could not be reached; try again")
 }
