@@ -79,7 +79,7 @@ func (c *Client) IssueSeries(ctx context.Context, tenant, outlet, device string,
 		}
 		out := make([]service.SeriesCode, 0, len(resp.JSON201.Items))
 		for _, s := range resp.JSON201.Items {
-			out = append(out, service.SeriesCode{Code: s.Code, DocType: string(s.DocType), RegistrationID: s.TaxRegistrationId, State: string(s.Status)})
+			out = append(out, service.SeriesCode{ID: s.Id, Code: s.Code, DocType: string(s.DocType), RegistrationID: s.TaxRegistrationId, State: string(s.Status)})
 		}
 		return out, nil
 	case http.StatusNotFound:

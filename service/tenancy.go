@@ -22,6 +22,7 @@ type Tenancy interface {
 
 // SeriesCode is one issued series of a device.
 type SeriesCode struct {
+	ID             string // tenancy's series id
 	Code           string
 	DocType        string
 	RegistrationID string
@@ -66,13 +67,14 @@ func (s *Service) issueSeriesFor(ctx context.Context, tenant, outlet, deviceID, 
 		return nil, false, err
 	}
 	for _, c := range codes {
-		series = append(series, devSeries{Code: c.Code, DocType: c.DocType, RegistrationID: c.RegistrationID, State: c.State})
+		series = append(series, devSeries{SeriesID: c.ID, Code: c.Code, DocType: c.DocType, RegistrationID: c.RegistrationID, State: c.State})
 	}
 	return series, false, nil
 }
 
 // devSeries is a series code of a device as stored with it, so a pack is built without a network call.
 type devSeries struct {
+	SeriesID       string `json:"series_id,omitempty"` // tenancy's id, for the drain statement's series set (ADR-0005 A3.3)
 	Code           string `json:"code"`
 	DocType        string `json:"doc_type"`
 	RegistrationID string `json:"tax_registration_id"`

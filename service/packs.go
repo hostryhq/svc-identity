@@ -108,18 +108,30 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 	if pv == nil {
 		pv = &packVer{}
 	}
+	until := now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour)
 	if pv.Digest != digest {
 		pv.Latest++
 		pv.Digest = digest
 		if err := put(tx, kPackVer, d.TenantID, d.ID, pv, keys{}); err != nil {
 			return gen.OfflinePack{}, err
 		}
-		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Series: seriesCodes(d), Digest: digest, At: now}
+		gd, err := s.storePackGrants(tx, d.TenantID, members)
+		if err != nil {
+			return gen.OfflinePack{}, err
+		}
+		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Series: seriesCodes(d), Digest: digest, At: now, Until: until, Grants: gd}
+		if err := put(tx, kPackHist, d.TenantID, h.ID, h, keys{k1: d.ID}); err != nil {
+			return gen.OfflinePack{}, err
+		}
+	} else if h, err := get[packHist](tx, kPackHist, d.TenantID, d.ID+":"+itoa(pv.Latest)); err != nil {
+		return gen.OfflinePack{}, err
+	} else if h != nil && until.After(h.Until) {
+		// The same version fetched again is valid offline until later: the gateway judges against the latest.
+		h.Until = until
 		if err := put(tx, kPackHist, d.TenantID, h.ID, h, keys{k1: d.ID}); err != nil {
 			return gen.OfflinePack{}, err
 		}
 	}
-	until := now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour)
 	claims := gen.OfflinePackClaims{CatalogueVersion: CatalogueVersion, IdleLockMinutes: s.Cfg.IdleLockMinutes, IntentTableVersion: 1,
 		IssuedAt: now, Members: members, OfflineValidUntil: until, OrganisationId: d.TenantID, PackV: pv.Latest,
 		RevokedDeviceIds: revoked, Series: series}
@@ -182,16 +194,28 @@ func (s *Service) CheckPackHistory(ctx context.Context, in gen.PackHistoryCheck)
 	}
 	var out gen.PackHistoryVerdict
 	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
-		h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(in.PackV))
-		if err != nil || h == nil {
-			return err
+		var hs []packHist
+		if in.PackV != nil {
+			h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(*in.PackV))
+			if err != nil || h == nil {
+				return err
+			}
+			hs = []packHist{*h}
+		} else {
+			// No pack_v: any pack ever issued to the device (the quarantine case, A3.2 row 7).
+			var err error
+			if hs, err = find[packHist](tx, kPackHist, pr.TenantID, in.DeviceId); err != nil {
+				return err
+			}
 		}
-		out.PackKnown = true
-		if in.MemberId != nil {
-			out.MemberInPack = slices.Contains(h.Members, *in.MemberId)
-		}
-		if in.SeriesCode != nil {
-			out.SeriesIssued = slices.Contains(h.Series, *in.SeriesCode)
+		for i := range hs {
+			out.PackKnown = true
+			if in.MemberId != nil && slices.Contains(hs[i].Members, *in.MemberId) {
+				out.MemberInPack = true
+			}
+			if in.SeriesCode != nil && slices.Contains(hs[i].Series, *in.SeriesCode) {
+				out.SeriesIssued = true
+			}
 		}
 		return nil
 	})

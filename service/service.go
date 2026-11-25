@@ -54,6 +54,8 @@ const (
 	kSeqCtr    = "seq"        // tenant: per-aggregate event sequence
 	kPackVer   = "pack_ver"   // tenant: latest pack_v per device
 	kProofFail = "proof_fail" // tenant: pin-grant failure counters
+	kPackGrant = "pack_grants" // tenant: permission sets of issued packs, once per digest (ADR-0005 A3.2)
+	kDevRecov  = "device_recovery" // tenant: key-loss recovery records, K1 = the old device id
 )
 
 func init() {

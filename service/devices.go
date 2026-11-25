@@ -67,6 +67,8 @@ type revocationDoc struct {
 	Type      string    `json:"type"` // device, session
 	Subject   string    `json:"subject"`
 	RevokedAt time.Time `json:"revoked_at"`
+	Reason    string    `json:"reason,omitempty"`      // devices: revoked or key_lost (ADR-0005 A3.2 row 5)
+	Recovery  string    `json:"recovery_id,omitempty"` // key_lost: the recovery record
 }
 
 func deviceDTO(d *device) gen.Device {
@@ -607,7 +609,7 @@ func (s *Service) revokeDeviceTx(tx repository.Tx, d *device, reason, by string)
 	}{d.TenantID}, keys{k1: "revoked:" + d.ID}); err != nil {
 		return err
 	}
-	if err := s.addRevocation(tx, d.TenantID, "device", d.ID); err != nil {
+	if err := s.addRevocationRow(tx, revocationDoc{TenantID: d.TenantID, Type: "device", Subject: d.ID, Reason: "revoked"}); err != nil {
 		return err
 	}
 	if err := s.emit(tx, d.TenantID, d.OutletID, "identity.device.revoked", d.ID, by, map[string]any{"device_id": d.ID, "reason": reason}); err != nil {
@@ -617,8 +619,14 @@ func (s *Service) revokeDeviceTx(tx repository.Tx, d *device, reason, by string)
 }
 
 func (s *Service) addRevocation(tx repository.Tx, tenant, typ, subject string) error {
-	r := revocationDoc{ID: string(s.NewID()), TenantID: tenant, Type: typ, Subject: subject, RevokedAt: s.now()}
-	return put(tx, kRevocation, repository.Global, r.ID, r, keys{k1: subject})
+	return s.addRevocationRow(tx, revocationDoc{TenantID: tenant, Type: typ, Subject: subject})
+}
+
+// addRevocationRow appends one row to the revocation feed, the gateway's only source of revocation
+// (ADR-0005 A3.2 row 5).
+func (s *Service) addRevocationRow(tx repository.Tx, r revocationDoc) error {
+	r.ID, r.RevokedAt = string(s.NewID()), s.now()
+	return put(tx, kRevocation, repository.Global, r.ID, r, keys{k1: r.Subject})
 }
 
 // ListRevocations is the gateway's "revocations since cursor" feed (internal, tenant-id-only).
@@ -636,7 +644,19 @@ func (s *Service) ListRevocations(ctx context.Context, p gen.ListRevocationsPara
 				out.NextCursor = &c
 				break
 			}
-			out.Items = append(out.Items, gen.Revocation{Id: r.ID, OrganisationId: r.TenantID, RevokedAt: r.RevokedAt, SubjectId: r.Subject, SubjectType: gen.RevocationSubjectType(r.Type)})
+			item := gen.Revocation{Id: r.ID, OrganisationId: r.TenantID, RevokedAt: r.RevokedAt, SubjectId: r.Subject, SubjectType: gen.RevocationSubjectType(r.Type)}
+			if r.Type == "device" {
+				reason := gen.RevocationReason(r.Reason)
+				if r.Reason == "" {
+					reason = gen.RevocationReasonRevoked
+				}
+				item.Reason = &reason
+				if r.Recovery != "" {
+					rid := r.Recovery
+					item.RecoveryId = &rid
+				}
+			}
+			out.Items = append(out.Items, item)
 		}
 		return nil
 	})
@@ -686,74 +706,5 @@ func (s *Service) CreateDrainToken(ctx context.Context, in gen.DrainRequest) (ge
 	if refuse != nil {
 		return out, refuse
 	}
-	return out, err
-}
-
-// RecordDeviceDrained is the gateway's report that a revoked device's operations are stored.
-func (s *Service) RecordDeviceDrained(ctx context.Context, id string, in gen.RecordDrain) (gen.Device, error) {
-	pr, ok := principal(ctx)
-	if !ok {
-		return gen.Device{}, errUnauth()
-	}
-	var out gen.Device
-	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
-		d, err := get[device](tx, kDevice, pr.TenantID, id)
-		if err != nil || d == nil {
-			return notFoundOr(err)
-		}
-		switch d.State {
-		case "active":
-			return apperr.New(apperr.Conflict, "device_not_revoked", "the device is not revoked")
-		case "revoked":
-			d.State, d.DrainedAt = "drained", s.now()
-			for _, st := range in.DrainedThrough {
-				d.DrainedThr = append(d.DrainedThr, stream{Stream: st.Stream, Seq: st.Seq})
-			}
-			if err := put(tx, kDevice, pr.TenantID, id, d, keys{k1: d.OutletID}); err != nil {
-				return err
-			}
-			// identity.device.drained (ADR-0014 A2.5 item 2), once, in the transaction of the state change. The
-			// per-series statement of the last number is not part of the gateway's drain report (recordDeviceDrained
-			// carries streams only), so series is empty until the contract carries it: tenancy then has nothing to
-			// fill and never receives a made-up number.
-			if err := s.emit(tx, d.TenantID, d.OutletID, "identity.device.drained", d.ID, pr.Subject,
-				map[string]any{"device_id": d.ID, "drained_at": d.DrainedAt, "series": []map[string]any{}}); err != nil {
-				return err
-			}
-		}
-		out = deviceDTO(d)
-		return nil
-	})
-	return out, err
-}
-
-// GetWipeOrder issues the signed wipe order, never sooner than 15 minutes after the drain, on
-// the server's clock (ADR-0005 section 4 step 5).
-func (s *Service) GetWipeOrder(ctx context.Context, id string) (gen.WipeOrder, error) {
-	pr, ok := principal(ctx)
-	if !ok {
-		return gen.WipeOrder{}, errUnauth()
-	}
-	var out gen.WipeOrder
-	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
-		d, err := get[device](tx, kDevice, pr.TenantID, id)
-		if err != nil || d == nil || pr.DeviceID != id {
-			return notFoundOr(err)
-		}
-		now := s.now()
-		if d.State != "drained" || now.Before(d.DrainedAt.Add(s.Cfg.WipeDelay)) {
-			return apperr.New(apperr.Conflict, "wipe_order_not_ready", "the wipe order is not ready yet")
-		}
-		thr := make([]gen.StreamSequence, 0, len(d.DrainedThr))
-		for _, t := range d.DrainedThr {
-			thr = append(thr, gen.StreamSequence{Stream: t.Stream, Seq: t.Seq})
-		}
-		jws, err := s.Tokens.Pack(map[string]any{"typ": "wipe", "device_id": d.ID, "drained_through": thr, "issued_at": now})
-		if err != nil {
-			return err
-		}
-		out = gen.WipeOrder{DeviceId: d.ID, DrainedThrough: thr, IssuedAt: now, Jws: jws}
-		return nil
-	})
 	return out, err
 }
