@@ -129,6 +129,9 @@ func serve(ctx context.Context, cfg *config) error {
 			return err
 		}
 	}
+	if err := st.CheckRole(ctx); err != nil {
+		return err
+	}
 	// Outbox relay: events reach the bus only through the outbox (ADR-0011 B4).
 	if cfg.NATSURL != "" {
 		if err := startRelay(ctx, cfg, st, log); err != nil {
