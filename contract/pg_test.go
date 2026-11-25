@@ -73,7 +73,7 @@ func TestContractAgainstPostgres(t *testing.T) {
 				}
 			}
 		})
-		return &contract.World{D: double.New(double.Options{ExampleLiterals: true, Config: cfg, Store: st,
+		return &contract.World{D: double.New(double.Options{ExampleLiterals: true, WithTenancy: true, Config: cfg, Store: st,
 			AccessLog: &postgres.AccessLog{DB: st.DB(), Role: "identity_app"}, Idem: postgres.NewIdempotency(st)})}
 	})
 }
