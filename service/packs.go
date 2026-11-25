@@ -17,6 +17,8 @@ import (
 type packVer struct {
 	Latest int    `json:"latest"`
 	Digest string `json:"digest"`
+	// Books are the manual books of the last good tenancy answer, carried while tenancy cannot answer.
+	Books []gen.PackManualBook `json:"books,omitempty"`
 }
 
 // pinDevice reports whether a device kind offers PIN login, and so receives verifiers (IC-16).
@@ -97,7 +99,14 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 		}
 	}
 	series := packSeries(d)                             // issued by tenancy (the registry is its), stored with the device
-	books := s.manualBooks(ctx, d)                      // entry-only paper books of the outlet, from tenancy (A1.6 item 4)
+	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
+	if err != nil {
+		return gen.OfflinePack{}, err
+	}
+	if pv == nil {
+		pv = &packVer{}
+	}
+	books := s.manualBooks(ctx, d, pv.Books)            // entry-only paper books of the outlet, from tenancy (A1.6 item 4); last good on an outage
 	ent, err := s.packEntitlements(ctx, tx, d.TenantID) // nil until tenancy has answered once; never blocks a pack (ADR-0014 T10)
 	if err != nil {
 		return gen.OfflinePack{}, err
@@ -110,17 +119,10 @@ func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (g
 	_ = json.NewEncoder(sum).Encode(digestParts)
 	digest := crypto.B64(sum.Sum(nil))
 
-	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
-	if err != nil {
-		return gen.OfflinePack{}, err
-	}
-	if pv == nil {
-		pv = &packVer{}
-	}
 	until := now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour)
 	if pv.Digest != digest {
 		pv.Latest++
-		pv.Digest = digest
+		pv.Digest, pv.Books = digest, books
 		if err := put(tx, kPackVer, d.TenantID, d.ID, pv, keys{}); err != nil {
 			return gen.OfflinePack{}, err
 		}

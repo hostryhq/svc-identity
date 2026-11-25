@@ -35,15 +35,19 @@ type Tenancy interface {
 // ManualBook is a registered paper bill book of an outlet.
 type ManualBook struct{ Code, RegistrationID string }
 
-// manualBooks are the books carried in a billing device's pack. A failed lookup leaves them out of this pack
-// (the next fetch carries them); it never fails the pack.
-func (s *Service) manualBooks(ctx context.Context, d *device) []gen.PackManualBook {
+// manualBooks are the books carried in a billing device's pack. A failed lookup keeps the last good answer
+// (lastGood, stored with the pack version) so an outage neither drops the books nor changes the pack digest;
+// it never fails the pack. The result is never nil, so "none" digests the same however it arose.
+func (s *Service) manualBooks(ctx context.Context, d *device, lastGood []gen.PackManualBook) []gen.PackManualBook {
 	if s.Tenancy == nil || billingFor(d.Kind) == "none" {
-		return nil
+		return []gen.PackManualBook{}
 	}
 	bs, err := s.Tenancy.ManualBooks(ctx, d.TenantID, d.OutletID)
 	if err != nil {
-		return nil
+		if lastGood == nil {
+			return []gen.PackManualBook{}
+		}
+		return lastGood
 	}
 	out := make([]gen.PackManualBook, 0, len(bs))
 	for _, b := range bs {
