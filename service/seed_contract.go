@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/repository"
 )
 
@@ -20,6 +21,7 @@ func (s *Service) exampleLiteral(got, want string) bool { return s.Cfg.ExampleLi
 // SeedDevice describes a device to seed.
 type SeedDevice struct {
 	ID, Outlet, Kind, Name, KeyProt, State, AccountID string
+	Store                                             string // protected (default) or unprotected
 	Key                                               crypto.JWK
 	LastSeen, DrainedAt                               time.Time
 	DrainedThrough                                    map[string]int
@@ -32,10 +34,18 @@ func (sd *Seeder) Device(ctx context.Context, tenant string, d SeedDevice) error
 		if d.State == "" {
 			d.State = "active"
 		}
-		doc := device{ID: d.ID, TenantID: tenant, OutletID: d.Outlet, Kind: d.Kind, Name: d.Name, State: d.State, KeyProt: d.KeyProt, Billing: billingFor(d.Kind),
+		if d.Store == "" {
+			d.Store = "protected"
+		}
+		doc := device{Store: d.Store, ID: d.ID, TenantID: tenant, OutletID: d.Outlet, Kind: d.Kind, Name: d.Name, State: d.State, KeyProt: d.KeyProt, Billing: billingFor(d.Kind),
 			Key: d.Key, Thumb: crypto.Thumbprint(d.Key), AccountID: d.AccountID, CreatedAt: s.now(), LastSeen: d.LastSeen, DrainedAt: d.DrainedAt}
 		for st, seq := range d.DrainedThrough {
 			doc.DrainedThr = append(doc.DrainedThr, stream{Stream: st, Seq: seq})
+		}
+		if b, err := s.brandFor(ctx, tenant, d.Outlet); err == nil {
+			doc.BrandID = b
+		} else if d.State == "active" {
+			return err
 		}
 		if d.State == "active" && s.Tenancy != nil {
 			series, unverified, err := s.issueSeriesFor(ctx, tenant, d.Outlet, d.ID, d.Kind)
@@ -143,23 +153,65 @@ func (sd *Seeder) Nonce(ctx context.Context, nonce string) error {
 }
 
 // Activation stores an activation code.
-func (sd *Seeder) Activation(ctx context.Context, tenant, id, code, outlet, kind string) error {
+func (sd *Seeder) Activation(ctx context.Context, tenant, id, code, outlet, kind, by string) error {
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
-		return put(tx, kActivation, repository.Global, crypto.MAC(s.Cfg.MACKey, "activation", code),
-			activationDoc{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, By: "seed", Expires: s.now().Add(10 * time.Minute)}, keys{k1: id})
+		ac := activationDoc{ID: id, TenantID: tenant, OutletID: outlet, Kind: kind, By: by, Expires: s.now().Add(10 * time.Minute), Created: s.now()}
+		ac.Key = crypto.MAC(s.Cfg.MACKey, "activation", code)
+		return ac.store(tx, ac.Key)
 	})
 }
 
 // PackHistory records that a pack version was issued to a device listing members and series.
-func (sd *Seeder) PackHistory(ctx context.Context, tenant, deviceID string, packV int, members, series []string) error {
+// perms gives each listed member the permissions the pack granted (members without an entry hold none);
+// the pack is valid offline for the configured offline days from now.
+func (sd *Seeder) PackHistory(ctx context.Context, tenant, deviceID string, packV int, members, series []string, perms map[string][]string) error {
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
-		h := packHist{ID: deviceID + ":" + itoa(packV), Device: deviceID, PackV: packV, Members: members, Series: series, At: s.now()}
+		pm := make([]gen.PackMember, 0, len(members))
+		for _, m := range members {
+			pm = append(pm, gen.PackMember{MemberId: m, Permissions: perms[m]})
+		}
+		gd, err := s.storePackGrants(tx, tenant, pm)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		h := packHist{ID: deviceID + ":" + itoa(packV), Device: deviceID, PackV: packV, Members: members, Series: series, At: now,
+			Until: now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour), Grants: gd}
 		if err := put(tx, kPackVer, tenant, deviceID, packVer{Latest: packV}, keys{}); err != nil {
 			return err
 		}
 		return put(tx, kPackHist, tenant, h.ID, h, keys{k1: deviceID})
+	})
+}
+
+// KeyLossRecovery records that device newID adopted the key-lost device oldID under recovery id, approved by
+// approver: the old device is revoked with reason key_lost and the recovery stays open until its drain is
+// recorded (ADR-0002 A1.3; ADR-0005 A3.2 rows 4 and 5). No identity route creates one yet.
+func (sd *Seeder) KeyLossRecovery(ctx context.Context, tenant, id, oldID, newID, approver string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		old, err := get[device](tx, kDevice, tenant, oldID)
+		if err != nil || old == nil {
+			return notFoundOr(err)
+		}
+		nd, err := get[device](tx, kDevice, tenant, newID)
+		if err != nil || nd == nil {
+			return notFoundOr(err)
+		}
+		nd.Recovers = oldID
+		if err := put(tx, kDevice, tenant, newID, nd, keys{k1: nd.OutletID}); err != nil {
+			return err
+		}
+		old.State, old.RevokedAt = "revoked", s.now()
+		if err := put(tx, kDevice, tenant, oldID, old, keys{k1: old.OutletID}); err != nil {
+			return err
+		}
+		if err := s.addRevocationRow(tx, revocationDoc{TenantID: tenant, Type: "device", Subject: oldID, Reason: "key_lost", Recovery: id}); err != nil {
+			return err
+		}
+		return put(tx, kDevRecov, tenant, id, deviceRecovery{ID: id, TenantID: tenant, OldDeviceID: oldID, NewDeviceID: newID, ApproverID: approver, RecoveredAt: s.now()}, keys{k1: oldID})
 	})
 }
 
@@ -176,7 +228,8 @@ func (sd *Seeder) ApprovalRequest(ctx context.Context, tenant, id, memberID, acc
 	s := sd.s
 	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
 		now := s.now()
-		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+		r := approvalReq{ID: id, TenantID: tenant, AccountID: accountID, Member: memberID, Session: sid, Operation: op, BodyHash: "sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8", Method: "POST", Path: "/v1/members",
+			Subject: "Add member Latha (Cashier at Main Restaurant)", State: "pending", CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
 		return put(tx, kApprReq, repository.Global, id, r, keys{k1: tenant, k2: accountID})
 	})
 }
@@ -254,6 +307,8 @@ func (sd *Seeder) OwnerInvitationWithID(ctx context.Context, id, tenant, mobile,
 type SeedApproval struct {
 	ID, Kind, Requester, Approver, Org, Mobile, NewMobile, State string
 	CompletesAt                                                  time.Time
+	// Lifetime of the record; zero keeps the 5 minutes of a sign-in request. Grant kinds lapse after 24 hours.
+	Lifetime time.Duration
 }
 
 // VendorApproval stores a vendor approval record.
@@ -261,8 +316,12 @@ func (sd *Seeder) VendorApproval(ctx context.Context, p SeedApproval) error {
 	s := sd.s
 	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
 		now := s.now()
+		life := p.Lifetime
+		if life == 0 {
+			life = 5 * time.Minute
+		}
 		a := vendorApproval{ID: p.ID, Kind: p.Kind, Requester: p.Requester, Approver: p.Approver, Org: p.Org, Mobile: p.Mobile, NewMobile: p.NewMobile, Reason: "seeded for the contract run",
-			Ticket: "SUP-2041", Verified: "callback_to_registered_number", State: p.State, CreatedAt: now, ExpiresAt: now.Add(5 * time.Minute), CompletesAt: p.CompletesAt}
+			Ticket: "SUP-2041", Verified: "callback_to_registered_number", State: p.State, CreatedAt: now, ExpiresAt: now.Add(life), CompletesAt: p.CompletesAt}
 		if p.State == "approved" && p.Kind == "sign_in_code" {
 			code := "7QK39XD2"
 			a.CodeMAC = crypto.MAC(s.Cfg.MACKey, "vcode", p.Mobile, code)
@@ -291,6 +350,19 @@ func (sd *Seeder) OwnerCount(ctx context.Context, tenant string, n int) error {
 	s := sd.s
 	return s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
 		return put(tx, kOwnerCount, repository.Global, tenant, ownerCount{N: n}, keys{})
+	})
+}
+
+// ClearDeviceBrand empties a device's brand, as a row created before ADR-0014 A3.4 has it (backfill tests).
+func (sd *Seeder) ClearDeviceBrand(ctx context.Context, tenant, deviceID string) error {
+	s := sd.s
+	return s.Store.Tx(ctx, tenant, func(tx repository.Tx) error {
+		d, err := get[device](tx, kDevice, tenant, deviceID)
+		if err != nil || d == nil {
+			return notFoundOr(err)
+		}
+		d.BrandID = ""
+		return put(tx, kDevice, tenant, deviceID, d, keys{k1: d.OutletID})
 	})
 }
 

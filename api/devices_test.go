@@ -36,7 +36,7 @@ func TestActivationCodeLifecycleAndRegistrationProof(t *testing.T) {
 	if act.Device.State != gen.DeviceStateActive || act.Device.KeyProtection != gen.OsSoftware || act.Device.BillingCapability != gen.BillingCapabilityActive {
 		t.Fatalf("device: %+v", act.Device)
 	}
-	if act.OfflinePack.PackV < 1 || act.OfflinePack.Claims.Device.DeviceId != dev.ID {
+	if act.OfflinePack.PackV < 1 || packClaims(act.OfflinePack).Device.DeviceId != dev.ID {
 		t.Fatalf("pack: %+v", act.OfflinePack)
 	}
 	// Event and audit: device.registered is in the outbox.
@@ -69,7 +69,7 @@ func TestActivationCodeLifecycleAndRegistrationProof(t *testing.T) {
 	if c := redeem(kds, code.Code, nil); c != 201 {
 		t.Fatalf("valid redemption: %d", c)
 	}
-	if c := redeem(double.NewDevice(newID()), code.Code, nil); c != 422 {
+	if c := redeem(double.NewDevice(newID()), code.Code, nil); c != 409 {
 		t.Fatalf("code redeemed twice: %d", c)
 	}
 	// A key already bound to an active device is refused for a different device id.
@@ -183,7 +183,7 @@ func TestRevokeDeviceDrainTokenAndWipeOrder(t *testing.T) {
 	e.expect(401, "", "GET", "/v1/devices/"+dev.ID+"/offline-packs/latest", dt.AccessToken, nil)
 	e.expect(409, "wipe_order_not_ready", "GET", "/v1/devices/"+dev.ID+"/wipe-order", dt.AccessToken, nil)
 	// The gateway reports the drain; the order is issued only 15 minutes later on the server clock.
-	e.mustJSON(200, "PUT", "/internal/v1/devices/"+dev.ID+"/drain", "", gen.RecordDrain{DrainedThrough: []gen.StreamSequence{{Stream: "device-ops", Seq: 40}}}, nil,
+	e.mustJSON(200, "PUT", "/internal/v1/devices/"+dev.ID+"/drain", "", gen.RecordDrain{DrainedThrough: through(device0Ops, 40), Statement: ptr(stmt(t, dev, dev.ID, `[{"stream":"device-ops","seq":40,"h":"ab"}]`, `[]`, ""))}, nil,
 		"Hostry-Service-Token", e.d.ServiceToken("sync", org))
 	e.d.Clock.Advance(4 * time.Minute)
 	var dt2 gen.DrainToken
@@ -226,9 +226,9 @@ func TestPackContents(t *testing.T) {
 	posPack := e.activate(tok, gen.Pos, pos).OfflinePack
 	kdsPack := e.activate(tok, gen.Kds, kds).OfflinePack
 	has := func(p gen.OfflinePack, id string) *gen.PackMember {
-		for i := range p.Claims.Members {
-			if p.Claims.Members[i].MemberId == id {
-				return &p.Claims.Members[i]
+		for i := range packClaims(p).Members {
+			if packClaims(p).Members[i].MemberId == id {
+				return &packClaims(p).Members[i]
 			}
 		}
 		return nil
@@ -288,9 +288,9 @@ func TestPinSetAndPinGrant(t *testing.T) {
 	var pack gen.OfflinePack
 	e.mustJSON(200, "GET", "/v1/devices/"+dev.ID+"/offline-packs/latest", dtok.AccessToken, nil, &pack)
 	var pm *gen.PackMember
-	for i := range pack.Claims.Members {
-		if pack.Claims.Members[i].MemberId == staff {
-			pm = &pack.Claims.Members[i]
+	for i := range packClaims(pack).Members {
+		if packClaims(pack).Members[i].MemberId == staff {
+			pm = &packClaims(pack).Members[i]
 		}
 	}
 	if pm == nil || pm.PinSalt == nil {

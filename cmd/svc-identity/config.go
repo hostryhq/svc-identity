@@ -20,6 +20,7 @@ import (
 	"github.com/hostryhq/go-common/clock"
 	"github.com/hostryhq/go-common/outbox"
 	"github.com/hostryhq/svc-identity/internal/crypto"
+	"github.com/hostryhq/svc-identity/internal/devtools"
 	"github.com/hostryhq/svc-identity/internal/tenancyclient"
 	"github.com/hostryhq/svc-identity/internal/token"
 	"github.com/hostryhq/svc-identity/service"
@@ -34,16 +35,18 @@ type config struct {
 	Listen      string // HOSTRY_IDENTITY_LISTEN
 	Migrate     bool   // HOSTRY_IDENTITY_AUTO_MIGRATE=1 (dev only)
 
-	TenantKeyFile, VendorKeyFile, PackKeyFile string // PEM PKCS#8 P-256 private keys
-	MACKeyFile, ProofKeyFile, TOTPKeyFile     string // base64 files holding 32 random bytes
-	ServiceKeysDir                            string // directory of <service>.pub.pem public keys
-	OpSigningPub                              string // PEM public key of the sync gateway's op-signing key
-	TenancyURL                                string // HOSTRY_TENANCY_URL: base URL of the tenancy service (series issuance)
-	ServiceSigningKeyFile                     string // HOSTRY_SERVICE_SIGNING_KEY_FILE: identity's own service-token key (PEM PKCS#8 P-256)
+	TenantKeyFile, VendorKeyFile          string // PEM PKCS#8 P-256 private keys
+	MACKeyFile, ProofKeyFile, TOTPKeyFile string // base64 files holding 32 random bytes
+	ServiceKeysDir                        string // directory of <service>.pub.pem public keys
+	OpSigningPub                          string // PEM public key of the sync gateway's op-signing key
+	TenancyURL                            string // HOSTRY_TENANCY_URL: base URL of the tenancy service (series issuance)
+	ServiceSigningKeyFile                 string // HOSTRY_SERVICE_SIGNING_KEY_FILE: identity's own service-token key (PEM PKCS#8 P-256)
 
 	SMS           string // HOSTRY_IDENTITY_SMS: "test" (dev only) ; "real" is not available (no DLT registration yet)
 	AllowTestSMS  bool   // HOSTRY_IDENTITY_ALLOW_TEST_SMS=1: the explicit dev flag
 	AllowConsole  bool   // HOSTRY_IDENTITY_ALLOW_CONSOLE_MAIL=1
+	DevCapture    bool   // HOSTRY_IDENTITY_DEV_CAPTURE=1: /dev/otp and /dev/mail (E1, E3); dev, test and ci only
+	DevClock      bool   // HOSTRY_IDENTITY_DEV_CLOCK=1: /dev/clock moves identity's clock (E2); dev, test and ci only
 	SignInCode    bool   // vendor_assist.signin_code.enabled
 	Recovery      bool   // vendor_assist.recovery.enabled
 	NATSURL       string // HOSTRY_NATS_URL (optional)
@@ -56,10 +59,11 @@ func loadConfig(get func(string) string) (*config, error) {
 	c := &config{
 		Environment: get("HOSTRY_ENV"), DSN: get("HOSTRY_IDENTITY_DSN"), DBRole: get("HOSTRY_IDENTITY_DB_ROLE"), Listen: orDefault(get("HOSTRY_IDENTITY_LISTEN"), ":8080"),
 		Migrate: get("HOSTRY_IDENTITY_AUTO_MIGRATE") == "1", TenantKeyFile: get("HOSTRY_IDENTITY_TENANT_KEY_FILE"), VendorKeyFile: get("HOSTRY_IDENTITY_VENDOR_KEY_FILE"),
-		PackKeyFile: get("HOSTRY_IDENTITY_PACK_KEY_FILE"), MACKeyFile: get("HOSTRY_IDENTITY_MAC_KEY_FILE"), ProofKeyFile: get("HOSTRY_IDENTITY_PROOF_KEY_FILE"),
+		MACKeyFile: get("HOSTRY_IDENTITY_MAC_KEY_FILE"), ProofKeyFile: get("HOSTRY_IDENTITY_PROOF_KEY_FILE"),
 		TOTPKeyFile: get("HOSTRY_IDENTITY_TOTP_KEY_FILE"), ServiceKeysDir: get("HOSTRY_SERVICE_KEYS_DIR"), OpSigningPub: get("HOSTRY_OP_SIGNING_PUB_FILE"),
 		TenancyURL: get("HOSTRY_TENANCY_URL"), ServiceSigningKeyFile: get("HOSTRY_SERVICE_SIGNING_KEY_FILE"),
 		SMS: orDefault(get("HOSTRY_IDENTITY_SMS"), "test"), AllowTestSMS: get("HOSTRY_IDENTITY_ALLOW_TEST_SMS") == "1", AllowConsole: get("HOSTRY_IDENTITY_ALLOW_CONSOLE_MAIL") == "1",
+		DevCapture: get("HOSTRY_IDENTITY_DEV_CAPTURE") == "1", DevClock: get("HOSTRY_IDENTITY_DEV_CLOCK") == "1",
 		SignInCode: get("HOSTRY_IDENTITY_VENDOR_SIGNIN_CODE") == "1", Recovery: get("HOSTRY_IDENTITY_VENDOR_RECOVERY") == "1",
 		NATSURL: get("HOSTRY_NATS_URL"), NATSSeedFile: get("HOSTRY_NATS_SEED_FILE"),
 	}
@@ -72,7 +76,7 @@ func loadConfig(get func(string) string) (*config, error) {
 	}
 	dev := c.Environment == "dev" || c.Environment == "test" || c.Environment == "ci"
 	if !dev {
-		for k, v := range map[string]string{"TENANT_KEY_FILE": c.TenantKeyFile, "VENDOR_KEY_FILE": c.VendorKeyFile, "PACK_KEY_FILE": c.PackKeyFile,
+		for k, v := range map[string]string{"TENANT_KEY_FILE": c.TenantKeyFile, "VENDOR_KEY_FILE": c.VendorKeyFile,
 			"MAC_KEY_FILE": c.MACKeyFile, "PROOF_KEY_FILE": c.ProofKeyFile, "TOTP_KEY_FILE": c.TOTPKeyFile} {
 			if v == "" {
 				bad("HOSTRY_IDENTITY_" + k + " is required outside dev, test and ci")
@@ -90,6 +94,15 @@ func loadConfig(get func(string) string) (*config, error) {
 	}
 	if c.SMS == "test" && (!dev || !c.AllowTestSMS) {
 		bad("the test SMS sender needs HOSTRY_ENV in dev, test or ci and HOSTRY_IDENTITY_ALLOW_TEST_SMS=1")
+	}
+	// The development aids use the guard of the test SMS sender: dev, test or ci, and the explicit flag.
+	if c.DevCapture || c.DevClock {
+		if err := devtools.Guard(c.Environment, c.AllowTestSMS); err != nil {
+			bad("HOSTRY_IDENTITY_DEV_CAPTURE and HOSTRY_IDENTITY_DEV_CLOCK: " + err.Error())
+		}
+		if c.SMS != "test" {
+			bad("HOSTRY_IDENTITY_DEV_CAPTURE and HOSTRY_IDENTITY_DEV_CLOCK need the test SMS sender (HOSTRY_IDENTITY_SMS=test)")
+		}
 	}
 	if c.Migrate && !dev {
 		bad("HOSTRY_IDENTITY_AUTO_MIGRATE is for dev only; run `svc-identity migrate`")
@@ -166,11 +179,7 @@ func (c *config) signer() (*token.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := token.LoadKey("p-"+c.Environment+"-pack", c.PackKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	return &token.Signer{TenantKey: t, VendorKey: v, Packer: p, Random: crypto.System}, nil
+	return &token.Signer{TenantKey: t, VendorKey: v, Random: crypto.System}, nil
 }
 
 func readPublic(path string) (*ecdsa.PublicKey, error) {

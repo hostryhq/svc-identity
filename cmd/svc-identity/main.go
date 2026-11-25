@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,9 +23,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hostryhq/go-common/bus"
 	"github.com/hostryhq/go-common/clock"
+	"github.com/hostryhq/go-common/events"
 	"github.com/hostryhq/go-common/health"
 	"github.com/hostryhq/go-common/ids"
+	"github.com/hostryhq/go-common/inbox"
 	"github.com/hostryhq/go-common/logx"
 	"github.com/hostryhq/go-common/outbox"
 	"github.com/hostryhq/svc-identity/internal/compose"
@@ -67,7 +71,7 @@ func run(args []string) error {
 	return fmt.Errorf("unknown command %q", args[0])
 }
 
-func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Result, *postgres.Store, error) {
+func assemble(ctx context.Context, cfg *config, log *slog.Logger, aids *devAids) (*compose.Result, *postgres.Store, error) {
 	st, err := postgres.Open(ctx, cfg.DSN, cfg.DBRole)
 	if err != nil {
 		return nil, nil, err
@@ -94,9 +98,19 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 	if err != nil {
 		return nil, nil, err
 	}
+	var clk clock.Clock = clock.System
+	var mail service.MailSender = terminalMail{}
+	if aids.capture != nil { // E1, E3: codes and setup links are readable from /dev/, never from logs
+		sms, mail = aids.capture, aids.capture.Mail()
+		log.Warn("DEV CAPTURE is on: sign-in codes and setup links are readable at /dev/otp and /dev/mail")
+	}
+	if aids.clock != nil { // E2
+		clk = aids.clock
+		log.Warn("DEV CLOCK is on: identity's clock can be moved at /dev/clock; tokens issued meanwhile are not valid at other services")
+	}
 	res, err := compose.Assemble(compose.Parts{
-		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB(), Role: cfg.DBRole}, Idem: postgres.NewIdempotency(st), Clock: clock.System,
-		NewID: ids.New, Rand: crypto.System, SMS: sms, Notify: logNotifier{log}, Mail: terminalMail{}, Signer: signer,
+		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB(), Role: cfg.DBRole}, Idem: postgres.NewIdempotency(st), Clock: clk,
+		NewID: ids.New, Rand: crypto.System, SMS: sms, Notify: logNotifier{log}, Mail: mail, Signer: signer,
 		Services: reg, Tenancy: ten, Log: log, Health: hc, SMSAsync: true,
 	})
 	return res, st, err
@@ -104,7 +118,8 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 
 func serve(ctx context.Context, cfg *config) error {
 	log := logx.New(os.Stderr, slog.LevelInfo, "identity")
-	res, st, err := assemble(ctx, cfg, log)
+	aids := cfg.devAids()
+	res, st, err := assemble(ctx, cfg, log, aids)
 	if err != nil {
 		return err
 	}
@@ -114,14 +129,33 @@ func serve(ctx context.Context, cfg *config) error {
 			return err
 		}
 	}
+	if err := st.CheckRole(ctx); err != nil {
+		return err
+	}
 	// Outbox relay: events reach the bus only through the outbox (ADR-0011 B4).
 	if cfg.NATSURL != "" {
 		if err := startRelay(ctx, cfg, st, log); err != nil {
 			return err
 		}
+		startConsumers(ctx, cfg, st, res.Service, log)
 	} else {
 		log.Warn("HOSTRY_NATS_URL is not set: events stay in the outbox and are not relayed")
 	}
+	go func() { // one-off backfill of device rows from before ADR-0014 A3.4: retried until tenancy has answered for every row
+		for wait := 2 * time.Second; ; wait = min(wait*2, time.Minute) {
+			left, err := res.Service.BackfillDeviceBrands(ctx)
+			if err == nil && left == 0 {
+				log.Info("device brand backfill complete")
+				return
+			}
+			log.Warn("device brand backfill incomplete; credentials and packs of unfilled devices answer 503", "remaining", left, "error", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+		}
+	}()
 	go func() { // owner recoveries complete on identity's clock
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
@@ -151,7 +185,11 @@ func serve(ctx context.Context, cfg *config) error {
 			}
 		}
 	}()
-	srv := &http.Server{Addr: cfg.Listen, Handler: res.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+	handler, err := aids.handler(cfg, res.Handler)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Addr: cfg.Listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	log.Info("identity listening", "addr", cfg.Listen, "environment", cfg.Environment)
@@ -163,6 +201,29 @@ func serve(ctx context.Context, cfg *config) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdown)
+}
+
+// startConsumers binds identity's durable consumers: tenancy and billing publish vendor_access.recorded, from
+// which identity marks an executed vendor approval (ADR-0005 A3.4). The handler is idempotent on its own; the
+// inbox adds the dedupe row and the parking of a poison event.
+func startConsumers(ctx context.Context, cfg *config, st *postgres.Store, svc *service.Service, log *slog.Logger) {
+	nc, err := bus.Connect(cfg.NATSURL, "identity", cfg.NATSSeedFile)
+	if err != nil {
+		log.Error("consumer: connect to the bus", "error", err)
+		return
+	}
+	handle := func(ctx context.Context, _ *sql.Tx, e events.Envelope) error { return svc.ConsumeTenancy(ctx, e) }
+	for _, publisher := range []string{"tenancy", "billing"} {
+		c, err := bus.BindConsumer(ctx, nc, publisher, "identity")
+		if err != nil {
+			log.Error("consumer: bind", "publisher", publisher, "error", err)
+			continue
+		}
+		sub := &inbox.Subscriber{DB: st.DB(), Consumer: "identity." + publisher, Handle: handle, Log: log,
+			OnPark: func(c, id, reason string) { log.Error("event parked", "consumer", c, "event_id", id, "reason", reason) }}
+		go func() { _ = sub.Run(ctx, c.Source(5*time.Second)) }()
+	}
+	go func() { <-ctx.Done(); nc.Close() }()
 }
 
 func startRelay(ctx context.Context, cfg *config, st *postgres.Store, log *slog.Logger) error {
@@ -203,7 +264,7 @@ func vendorCmd(ctx context.Context, cfg *config, args []string) error {
 		}
 	}
 	log := logx.New(os.Stderr, slog.LevelWarn, "identity")
-	res, st, err := assemble(ctx, cfg, log)
+	res, st, err := assemble(ctx, cfg, log, &devAids{})
 	if err != nil {
 		return err
 	}

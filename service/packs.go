@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"slices"
+	"sort"
 	"time"
 
 	auth "github.com/hostryhq/go-auth"
@@ -17,6 +18,8 @@ import (
 type packVer struct {
 	Latest int    `json:"latest"`
 	Digest string `json:"digest"`
+	// Books are the manual books of the last good tenancy answer, carried while tenancy cannot answer.
+	Books []gen.PackManualBook `json:"books,omitempty"`
 }
 
 // pinDevice reports whether a device kind offers PIN login, and so receives verifiers (IC-16).
@@ -50,7 +53,7 @@ func (s *Service) packPermissions(m *member, roles map[string]*role, outlet stri
 	return sortedKeys(set)
 }
 
-func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error) {
+func (s *Service) buildPack(ctx context.Context, tx repository.Tx, d *device) (gen.OfflinePack, error) {
 	now := s.now()
 	roles, _, err := s.loadRoles(tx, d.TenantID)
 	if err != nil {
@@ -97,10 +100,6 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 		}
 	}
 	series := packSeries(d) // issued by tenancy (the registry is its), stored with the device
-	sum := sha256.New()
-	_ = json.NewEncoder(sum).Encode([]any{members, revoked, series, d.State})
-	digest := crypto.B64(sum.Sum(nil))
-
 	pv, err := get[packVer](tx, kPackVer, d.TenantID, d.ID)
 	if err != nil {
 		return gen.OfflinePack{}, err
@@ -108,33 +107,161 @@ func (s *Service) buildPack(tx repository.Tx, d *device) (gen.OfflinePack, error
 	if pv == nil {
 		pv = &packVer{}
 	}
+	hub := d.Kind == "hub" // a hub's pack is a HubPackClaims: no names, verifiers, series, books or entitlements (ADR-0002 A3.4 item 3)
+	var books []gen.PackManualBook
+	var ent *gen.EntitlementSnapshot
+	if !hub {
+		books = s.manualBooks(ctx, d, pv.Books)                             // entry-only paper books of the outlet, from tenancy (A1.6 item 4); last good on an outage
+		if ent, err = s.packEntitlements(ctx, tx, d.TenantID); err != nil { // nil until tenancy has answered once; never blocks a pack (ADR-0014 T10)
+			return gen.OfflinePack{}, err
+		}
+	}
+	sum := sha256.New()
+	digestParts := []any{members, revoked, series, d.State, books}
+	if hub {
+		digestParts = []any{hubMembers(members), revoked, d.State, peerDigest(ds, d.ID)} // a registered or revoked peer changes the digest, so the next fetch is a newer pack
+	}
+	if ent != nil { // appended only when present, so a pack without a snapshot keeps its earlier digest
+		digestParts = append(digestParts, ent.EntitlementsV)
+	}
+	_ = json.NewEncoder(sum).Encode(digestParts)
+	digest := crypto.B64(sum.Sum(nil))
+
+	until := now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour)
 	if pv.Digest != digest {
 		pv.Latest++
-		pv.Digest = digest
+		pv.Digest, pv.Books = digest, books
 		if err := put(tx, kPackVer, d.TenantID, d.ID, pv, keys{}); err != nil {
 			return gen.OfflinePack{}, err
 		}
-		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Series: seriesCodes(d), Digest: digest, At: now}
+		gd, err := s.storePackGrants(tx, d.TenantID, members)
+		if err != nil {
+			return gen.OfflinePack{}, err
+		}
+		h := packHist{ID: d.ID + ":" + itoa(pv.Latest), Device: d.ID, PackV: pv.Latest, Members: memberIDs, Series: seriesCodes(d), Digest: digest, At: now, Until: until, Grants: gd}
+		if err := put(tx, kPackHist, d.TenantID, h.ID, h, keys{k1: d.ID}); err != nil {
+			return gen.OfflinePack{}, err
+		}
+	} else if h, err := get[packHist](tx, kPackHist, d.TenantID, d.ID+":"+itoa(pv.Latest)); err != nil {
+		return gen.OfflinePack{}, err
+	} else if h != nil && until.After(h.Until) {
+		// The same version fetched again is valid offline until later: the gateway judges against the latest.
+		h.Until = until
 		if err := put(tx, kPackHist, d.TenantID, h.ID, h, keys{k1: d.ID}); err != nil {
 			return gen.OfflinePack{}, err
 		}
 	}
-	until := now.Add(time.Duration(s.Cfg.OfflineDays) * 24 * time.Hour)
+	if d.BrandID == "" && s.Tenancy != nil { // a row from before ADR-0014 A3.4 that the backfill has not reached
+		return gen.OfflinePack{}, errBrandUnknown()
+	}
+	cred, err := s.credentialJWS(d, until)
+	if err != nil {
+		return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+	}
+	pd := gen.PackDevice{DeviceId: d.ID, Kind: gen.DeviceKind(d.Kind), OutletId: d.OutletID, BrandId: d.BrandID, Kid: DeviceKID(d.ID),
+		PublicKey: gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}, Store: storeOf(d), Credential: cred}
+	var idKeys []gen.Jwk
+	for _, k := range s.Tokens.JWKS(false) {
+		idKeys = append(idKeys, gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: k.Key.X, Y: k.Key.Y, Kid: k.Kid, Alg: gen.ES256, Use: gen.Sig})
+	}
+	op := s.Cfg.OpSigning
+	opKey := gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: op.X, Y: op.Y, Kid: "op-1", Alg: gen.ES256, Use: gen.Sig}
+	if hub {
+		peers, err := s.hubPeers(ds, d.ID, until)
+		if err != nil {
+			return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+		}
+		hc := gen.HubPackClaims{Device: pd, IdentityPublicKeys: idKeys, IntentTableVersion: 1, IssuedAt: now, Members: hubMembers(members),
+			IssuerEnv: s.issuerEnv(), Peers: peers,
+			OfflineValidUntil: until, OpSigningPublicKey: opKey, OrganisationId: d.TenantID, PackV: pv.Latest, RevokedDeviceIds: revoked}
+		jws, err := s.Tokens.Pack(hc)
+		if err != nil {
+			return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
+		}
+		out := gen.OfflinePack{IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}
+		if err := out.Claims.FromHubPackClaims(hc); err != nil {
+			return gen.OfflinePack{}, err
+		}
+		return out, nil
+	}
 	claims := gen.OfflinePackClaims{CatalogueVersion: CatalogueVersion, IdleLockMinutes: s.Cfg.IdleLockMinutes, IntentTableVersion: 1,
 		IssuedAt: now, Members: members, OfflineValidUntil: until, OrganisationId: d.TenantID, PackV: pv.Latest,
 		RevokedDeviceIds: revoked, Series: series}
-	claims.Device.DeviceId, claims.Device.Kind, claims.Device.OutletId = d.ID, gen.DeviceKind(d.Kind), d.OutletID
-	claims.Device.PublicKey = gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: d.Key.X, Y: d.Key.Y}
-	for _, k := range s.Tokens.JWKS(false) {
-		claims.IdentityPublicKeys = append(claims.IdentityPublicKeys, gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: k.Key.X, Y: k.Key.Y, Kid: k.Kid, Alg: gen.ES256, Use: gen.Sig})
+	if len(books) > 0 {
+		claims.ManualBooks = &books
 	}
-	op := s.Cfg.OpSigning
-	claims.OpSigningPublicKey = gen.Jwk{Kty: gen.JwkKtyEC, Crv: gen.JwkCrvP256, X: op.X, Y: op.Y, Kid: "op-1", Alg: gen.ES256, Use: gen.Sig}
+	claims.Entitlements = ent
+	claims.Device, claims.IdentityPublicKeys, claims.OpSigningPublicKey = pd, idKeys, opKey
+	claims.IssuerEnv = s.issuerEnv()
 	jws, err := s.Tokens.Pack(claims)
 	if err != nil {
 		return gen.OfflinePack{}, apperr.Wrap(apperr.Internal, "pack.sign_failed", "", err)
 	}
-	return gen.OfflinePack{Claims: claims, IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}, nil
+	out := gen.OfflinePack{IssuedAt: now, Jws: jws, OfflineValidUntil: until, PackV: pv.Latest}
+	if err := out.Claims.FromOfflinePackClaims(claims); err != nil {
+		return gen.OfflinePack{}, err
+	}
+	return out, nil
+}
+
+// issuerEnv is the pack's `issuer_env` claim: HOSTRY_ENV when it is dev, test or ci, otherwise live.
+func (s *Service) issuerEnv() gen.IssuerEnv {
+	switch s.Cfg.Environment {
+	case "dev":
+		return gen.Dev
+	case "test":
+		return gen.Test
+	case "ci":
+		return gen.Ci
+	}
+	return gen.Live
+}
+
+// peerDevices are the devices a hub lists as peers: the other active devices of its outlet, any kind but hub.
+func peerDevices(ds []device, self string) []device {
+	var out []device
+	for _, o := range ds {
+		if o.ID != self && o.State == "active" && o.Kind != "hub" {
+			out = append(out, o)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// peerDigest is what of the peers goes into a hub pack's digest: id, kind and key, so registering or
+// revoking a device yields a new pack version.
+func peerDigest(ds []device, self string) [][3]string {
+	out := [][3]string{}
+	for _, o := range peerDevices(ds, self) {
+		out = append(out, [3]string{o.ID, o.Kind, o.Key.X + o.Key.Y})
+	}
+	return out
+}
+
+// hubPeers builds the peer entries of a hub pack, each the data of that peer's own PackDevice.
+func (s *Service) hubPeers(ds []device, self string, until time.Time) ([]gen.HubPackPeer, error) {
+	out := []gen.HubPackPeer{}
+	for _, o := range peerDevices(ds, self) {
+		o := o
+		cred, err := s.credentialJWS(&o, until)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, gen.HubPackPeer{DeviceId: o.ID, Kind: gen.DeviceKind(o.Kind), Kid: DeviceKID(o.ID), Store: storeOf(&o), Credential: cred,
+			PublicKey: gen.PublicJwk{Kty: gen.PublicJwkKtyEC, Crv: gen.PublicJwkCrvP256, X: o.Key.X, Y: o.Key.Y}})
+	}
+	return out, nil
+}
+
+// hubMembers is the structural view a hub holds (ADR-0002 S8): id, status and permissions only. Display
+// names, PIN salts, verifiers and versions are left out, so the pack carries no secret.
+func hubMembers(ms []gen.PackMember) []gen.HubPackMember {
+	out := make([]gen.HubPackMember, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, gen.HubPackMember{MemberId: m.MemberId, Status: gen.HubPackMemberStatus(m.Status), Permissions: m.Permissions})
+	}
+	return out
 }
 
 func findK1Devices(tx repository.Tx, tenant, outlet string) ([]device, error) {
@@ -167,7 +294,7 @@ func (s *Service) GetDeviceOfflinePack(ctx context.Context, id string) (gen.Offl
 		if err := put(tx, kDevice, pr.TenantID, id, d, keys{k1: d.OutletID}); err != nil {
 			return err
 		}
-		out, err = s.buildPack(tx, d)
+		out, err = s.buildPack(ctx, tx, d)
 		return err
 	})
 	return out, err
@@ -182,16 +309,28 @@ func (s *Service) CheckPackHistory(ctx context.Context, in gen.PackHistoryCheck)
 	}
 	var out gen.PackHistoryVerdict
 	err := s.Store.Tx(ctx, pr.TenantID, func(tx repository.Tx) error {
-		h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(in.PackV))
-		if err != nil || h == nil {
-			return err
+		var hs []packHist
+		if in.PackV != nil {
+			h, err := get[packHist](tx, kPackHist, pr.TenantID, in.DeviceId+":"+itoa(*in.PackV))
+			if err != nil || h == nil {
+				return err
+			}
+			hs = []packHist{*h}
+		} else {
+			// No pack_v: any pack ever issued to the device (the quarantine case, A3.2 row 7).
+			var err error
+			if hs, err = find[packHist](tx, kPackHist, pr.TenantID, in.DeviceId); err != nil {
+				return err
+			}
 		}
-		out.PackKnown = true
-		if in.MemberId != nil {
-			out.MemberInPack = slices.Contains(h.Members, *in.MemberId)
-		}
-		if in.SeriesCode != nil {
-			out.SeriesIssued = slices.Contains(h.Series, *in.SeriesCode)
+		for i := range hs {
+			out.PackKnown = true
+			if in.MemberId != nil && slices.Contains(hs[i].Members, *in.MemberId) {
+				out.MemberInPack = true
+			}
+			if in.SeriesCode != nil && slices.Contains(hs[i].Series, *in.SeriesCode) {
+				out.SeriesIssued = true
+			}
 		}
 		return nil
 	})

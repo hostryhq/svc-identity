@@ -73,10 +73,30 @@ func (h *Handler) GetVendorJwks(w http.ResponseWriter, r *http.Request) {
 
 // ---- devices ----
 
+func (h *Handler) ListActivationCodes(w http.ResponseWriter, r *http.Request, p gen.ListActivationCodesParams) {
+	call(w, r, http.StatusOK, func() (gen.ActivationCodePage, error) { return h.s.ListActivationCodes(r.Context(), p) })
+}
+
+func (h *Handler) RevokeActivationCode(w http.ResponseWriter, r *http.Request, activationCodeId gen.Id, _ gen.RevokeActivationCodeParams) {
+	call(w, r, http.StatusOK, func() (gen.ActivationCodeSummary, error) {
+		return h.s.RevokeActivationCode(r.Context(), activationCodeId)
+	})
+}
+
+func (h *Handler) IssueVendorApprovalGrant(w http.ResponseWriter, r *http.Request, approvalId gen.Id, _ gen.IssueVendorApprovalGrantParams) {
+	call(w, r, http.StatusCreated, func() (gen.VendorApprovalGrant, error) {
+		return h.s.IssueVendorApprovalGrant(r.Context(), approvalId)
+	})
+}
+
 func (h *Handler) CreateActivationCode(w http.ResponseWriter, r *http.Request, _ gen.CreateActivationCodeParams) {
 	do(w, r, http.StatusCreated, func(in gen.CreateActivationCode) (gen.ActivationCode, error) {
 		return h.s.CreateActivationCode(r.Context(), in)
 	})
+}
+
+func (h *Handler) CreateDeviceRecoveryCode(w http.ResponseWriter, r *http.Request, deviceId gen.Id, _ gen.CreateDeviceRecoveryCodeParams) {
+	call(w, r, http.StatusCreated, func() (gen.RecoveryCode, error) { return h.s.CreateDeviceRecoveryCode(r.Context(), deviceId) })
 }
 
 func (h *Handler) ActivateDevice(w http.ResponseWriter, r *http.Request, _ gen.ActivateDeviceParams) {
@@ -243,4 +263,26 @@ func (h *Handler) CheckPackHistory(w http.ResponseWriter, r *http.Request, _ gen
 	do(w, r, http.StatusOK, func(in gen.PackHistoryCheck) (gen.PackHistoryVerdict, error) {
 		return h.s.CheckPackHistory(r.Context(), in)
 	})
+}
+
+// ---- internal directory questions of the sync gateway (ADR-0005 A3.2) ----
+
+func (h *Handler) GetDeviceCredential(w http.ResponseWriter, r *http.Request, deviceId gen.Id) {
+	call(w, r, http.StatusOK, func() (gen.DeviceCredential, error) { return h.s.GetDeviceCredential(r.Context(), deviceId) })
+}
+
+func (h *Handler) GetPackGrants(w http.ResponseWriter, r *http.Request, deviceId gen.Id, packV int) {
+	call(w, r, http.StatusOK, func() (gen.PackGrants, error) { return h.s.GetPackGrants(r.Context(), deviceId, packV) })
+}
+
+func (h *Handler) GetMemberGrants(w http.ResponseWriter, r *http.Request, memberId gen.Id, p gen.GetMemberGrantsParams) {
+	call(w, r, http.StatusOK, func() (gen.MemberGrants, error) { return h.s.GetMemberGrants(r.Context(), memberId, p.OutletId) })
+}
+
+func (h *Handler) GetDeviceRecovery(w http.ResponseWriter, r *http.Request, deviceId gen.Id) {
+	call(w, r, http.StatusOK, func() (gen.DeviceRecovery, error) { return h.s.GetDeviceRecovery(r.Context(), deviceId) })
+}
+
+func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request, sessionId gen.Id) {
+	call(w, r, http.StatusOK, func() (gen.SessionFacts, error) { return h.s.GetSession(r.Context(), sessionId) })
 }

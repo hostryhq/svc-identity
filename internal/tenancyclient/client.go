@@ -17,6 +17,7 @@ import (
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-common/apperr"
+	"github.com/hostryhq/svc-identity/internal/gen"
 	"github.com/hostryhq/svc-identity/internal/gen/tenancy"
 	"github.com/hostryhq/svc-identity/service"
 )
@@ -79,7 +80,7 @@ func (c *Client) IssueSeries(ctx context.Context, tenant, outlet, device string,
 		}
 		out := make([]service.SeriesCode, 0, len(resp.JSON201.Items))
 		for _, s := range resp.JSON201.Items {
-			out = append(out, service.SeriesCode{Code: s.Code, DocType: string(s.DocType), RegistrationID: s.TaxRegistrationId, State: string(s.Status)})
+			out = append(out, service.SeriesCode{ID: s.Id, Code: s.Code, DocType: string(s.DocType), RegistrationID: s.TaxRegistrationId, State: string(s.Status)})
 		}
 		return out, nil
 	case http.StatusNotFound:
@@ -111,6 +112,81 @@ func (c *Client) once(ctx context.Context, tenant, key string, body tenancy.Issu
 		})
 }
 
+// ManualBooks lists the active paper bill books of an outlet.
+func (c *Client) ManualBooks(ctx context.Context, tenant, outlet string) ([]service.ManualBook, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	tok, err := c.signer.Sign(Audience, tenant)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.c.ListOutletManualBookSeriesWithResponse(ctx, outlet, func(_ context.Context, r *http.Request) error {
+		r.Header.Set(auth.ServiceTokenHeader, tok)
+		return nil
+	})
+	if err != nil || resp.JSON200 == nil {
+		return nil, unavailable()
+	}
+	out := make([]service.ManualBook, 0, len(resp.JSON200.Items))
+	for _, b := range resp.JSON200.Items {
+		if string(b.Status) != "active" {
+			continue
+		}
+		out = append(out, service.ManualBook{Code: b.Code, RegistrationID: b.TaxRegistrationId})
+	}
+	return out, nil
+}
+
+// OutletBrand reads the brand of an outlet (getStreamOwner, ADR-0014 A3.4 item 1). One bounded retry with
+// jitter on a transport failure or a 502, 503 or 504; a read, so a retry repeats nothing. An answer that
+// is not an outlet with a brand is unavailable, never a guess.
+func (c *Client) OutletBrand(ctx context.Context, tenant, outlet string) (string, error) {
+	var resp *tenancy.GetStreamOwnerResponse
+	for attempt := 0; attempt < 2; attempt++ {
+		var err error
+		resp, err = c.streamOwner(ctx, tenant, outlet)
+		if err == nil && resp.StatusCode() != http.StatusBadGateway && resp.StatusCode() != http.StatusServiceUnavailable && resp.StatusCode() != http.StatusGatewayTimeout {
+			break
+		}
+		resp = nil
+		if attempt == 0 {
+			select {
+			case <-time.After(time.Duration(50+rand.IntN(100)) * time.Millisecond):
+			case <-ctx.Done():
+				return "", unavailable()
+			}
+		}
+	}
+	if resp == nil {
+		return "", unavailable()
+	}
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		if resp.JSON200 == nil || string(resp.JSON200.Kind) != "outlet" || resp.JSON200.BrandId == nil || *resp.JSON200.BrandId == "" {
+			return "", unavailable()
+		}
+		return *resp.JSON200.BrandId, nil
+	case http.StatusNotFound:
+		return "", service.ErrOutletUnknown
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "", apperr.New(apperr.Internal, "tenancy.not_authorised", "")
+	}
+	return "", unavailable()
+}
+
+func (c *Client) streamOwner(ctx context.Context, tenant, outlet string) (*tenancy.GetStreamOwnerResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	tok, err := c.signer.Sign(Audience, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return c.c.GetStreamOwnerWithResponse(ctx, outlet, func(_ context.Context, r *http.Request) error {
+		r.Header.Set(auth.ServiceTokenHeader, tok)
+		return nil
+	})
+}
+
 func unavailable() error {
 	return apperr.New(apperr.Unavailable, "tenancy.unavailable", "the tenancy service could not be reached; try again")
 }
@@ -129,4 +205,51 @@ func problemCode(body []byte) string {
 	}
 	_ = json.Unmarshal(body, &p)
 	return p.Code
+}
+
+// Entitlements reads the organisation's entitlement snapshot (getEntitlements, ADR-0014 T10). One bounded retry
+// with jitter on a transport failure or a 502, 503 or 504; a read, so a retry repeats nothing.
+func (c *Client) Entitlements(ctx context.Context, tenant string) (gen.EntitlementSnapshot, error) {
+	var resp *tenancy.GetEntitlementsResponse
+	for attempt := 0; attempt < 2; attempt++ {
+		var err error
+		resp, err = c.entitlements(ctx, tenant)
+		if err == nil && resp.StatusCode() != http.StatusBadGateway && resp.StatusCode() != http.StatusServiceUnavailable && resp.StatusCode() != http.StatusGatewayTimeout {
+			break
+		}
+		resp = nil
+		if attempt == 0 {
+			select {
+			case <-time.After(time.Duration(50+rand.IntN(100)) * time.Millisecond):
+			case <-ctx.Done():
+				return gen.EntitlementSnapshot{}, unavailable()
+			}
+		}
+	}
+	if resp == nil || resp.JSON200 == nil {
+		return gen.EntitlementSnapshot{}, unavailable()
+	}
+	e := resp.JSON200
+	out := gen.EntitlementSnapshot{AsOf: e.AsOf, EntitlementsV: e.EntitlementsV, Features: e.Features, Limits: e.Limits,
+		OrganisationStatus: gen.EntitlementSnapshotOrganisationStatus(e.OrganisationStatus), PlanKey: e.PlanKey, PlanVersion: e.PlanVersion, ValidUntil: e.ValidUntil}
+	if out.Features == nil {
+		out.Features = []string{}
+	}
+	if out.Limits == nil {
+		out.Limits = map[string]int{}
+	}
+	return out, nil
+}
+
+func (c *Client) entitlements(ctx context.Context, tenant string) (*tenancy.GetEntitlementsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	tok, err := c.signer.Sign(Audience, tenant)
+	if err != nil {
+		return nil, err
+	}
+	return c.c.GetEntitlementsWithResponse(ctx, func(_ context.Context, r *http.Request) error {
+		r.Header.Set(auth.ServiceTokenHeader, tok)
+		return nil
+	})
 }

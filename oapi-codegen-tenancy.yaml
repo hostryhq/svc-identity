@@ -7,3 +7,6 @@ generate:
 output-options:
   include-operation-ids:
     - issueDocumentSeries
+    - listOutletManualBookSeries
+    - getStreamOwner
+    - getEntitlements

@@ -85,7 +85,7 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, operationID, method
 		}
 		now := s.now()
 		r := approvalReq{ID: string(s.NewID()), TenantID: pr.TenantID, AccountID: sess.AccountID, Member: pr.Subject, Session: sess.ID,
-			Operation: operationID, BodyHash: BodyHashField(requestBody), Method: method, Path: path, Subject: subject, State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
+			Operation: operationID, BodyHash: BodyHashField(requestBody), Method: method, Path: path, Subject: withSummary(subject, s.approvalSummary(tx, pr.TenantID, operationID, path, requestBody)), State: "pending", CreatedAt: now, ExpiresAt: now.Add(s.Cfg.ApprovalReqTTL)}
 		if err := put(tx, kApprReq, repository.Global, r.ID, r, keys{k1: r.TenantID, k2: r.AccountID}); err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ func claimBodyHash(field string) string {
 }
 
 func approvalDTO(r *approvalReq, now time.Time, showToken bool) gen.ApprovalRequest {
-	g := gen.ApprovalRequest{Id: r.ID, OperationId: r.Operation, BodyHash: r.BodyHash, Subject: strp(r.Subject), RequestMethod: strp(r.Method), RequestPath: strp(r.Path), CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, State: gen.ApprovalRequestState(r.effective(now))}
+	g := gen.ApprovalRequest{Id: r.ID, OperationId: r.Operation, BodyHash: r.BodyHash, Subject: r.Subject, RequestMethod: gen.ApprovalRequestRequestMethod(r.Method), RequestPath: r.Path, TargetHash: strp("sha256:" + auth.TargetHash(r.Method, r.Path, strings.TrimPrefix(r.BodyHash, "sha256:"))), CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, State: gen.ApprovalRequestState(r.effective(now))}
 	if showToken && r.Token != "" {
 		t := r.Token
 		g.ApprovalToken = &t

@@ -45,15 +45,18 @@ const (
 	kRecovery   = "owner_recovery"
 	kOwnerCount = "owner_count" // global: owners per organisation, for the last-owner rule
 
-	kMember    = "member"     // tenant
-	kRole      = "role"       // tenant
-	kDevice    = "device"     // tenant
-	kPackHist  = "pack_hist"  // tenant: pack versions issued per device
-	kPinSess   = "pin_sess"   // tenant: pin sessions (sid ownership)
-	kPinReset  = "pin_reset"  // tenant: PIN reset authorisations
-	kSeqCtr    = "seq"        // tenant: per-aggregate event sequence
-	kPackVer   = "pack_ver"   // tenant: latest pack_v per device
-	kProofFail = "proof_fail" // tenant: pin-grant failure counters
+	kMember       = "member"          // tenant
+	kRole         = "role"            // tenant
+	kDevice       = "device"          // tenant
+	kPackHist     = "pack_hist"       // tenant: pack versions issued per device
+	kPinSess      = "pin_sess"        // tenant: pin sessions (sid ownership)
+	kPinReset     = "pin_reset"       // tenant: PIN reset authorisations
+	kSeqCtr       = "seq"             // tenant: per-aggregate event sequence
+	kPackVer      = "pack_ver"        // tenant: latest pack_v per device
+	kProofFail    = "proof_fail"      // tenant: pin-grant failure counters
+	kPackGrant    = "pack_grants"     // tenant: permission sets of issued packs, once per digest (ADR-0005 A3.2)
+	kDevRecov     = "device_recovery" // tenant: key-loss recovery records, K1 = the old device id
+	kEntitlements = "entitlements"    // tenant: last entitlement snapshot read from tenancy, id = tenant (ADR-0014 T10)
 )
 
 func init() {
@@ -93,7 +96,9 @@ type TokenIssuer interface {
 	Access(c auth.Claims) (string, error)   // tenant realm: user, pin, device, drain, support, approval
 	Vendor(c auth.Claims) (string, error)   // vendor realm
 	Opaque() string                         // refresh token, 256-bit
-	Pack(claims any) (string, error)        // offline pack and wipe order JWS
+	Pack(claims any) (string, error)        // offline pack JWS
+	Wipe(claims any) (string, error)        // wipe order JWS
+	Credential(claims any) (string, error)  // LAN credential JWS, typ hostry-cred+jws, signed with the current identity key (ADR-0002 A3.4)
 	VendorGrant(claims any) (string, error) // vendor approval grant for another service (typ vendor_approval)
 	JWKS(vendor bool) []KeyInfo             // published public keys: current and pre-published next
 }

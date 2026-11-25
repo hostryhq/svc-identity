@@ -2,8 +2,7 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+
 	"strings"
 	"time"
 
@@ -44,6 +43,10 @@ type vendorApproval struct {
 	RuleSetID   string `json:"rule_set_id,omitempty"`
 	RuleSetHash string `json:"rule_set_content_hash,omitempty"`
 	Effective   string `json:"effective_date,omitempty"`
+	// OwnerExportOffered (org_close): the requester confirmed the owner was offered an export (BR-A1-72).
+	OwnerExportOffered bool `json:"owner_export_offered,omitempty"`
+	// GrantJTI is the jti of the most recent grant issued for the approval (the live one).
+	GrantJTI string `json:"grant_jti,omitempty"`
 }
 
 // grantKind reports whether the approval kind is executed by another service with a vendor approval
@@ -69,17 +72,60 @@ func targetStatus(kind string) string {
 	return ""
 }
 
-// subjectHash binds the grant to what it authorises: organisation id and target status for the org_*
-// kinds; rule-set id, content hash and effective date for tax_rule_set_publish.
-func (a *vendorApproval) subjectHash() string {
-	var parts []string
-	if a.Kind == "tax_rule_set_publish" {
-		parts = []string{a.Kind, a.RuleSetID, a.RuleSetHash, a.Effective}
-	} else {
-		parts = []string{a.Kind, a.Org, targetStatus(a.Kind)}
+// PlatformOrg is the org claim of a grant for a platform-wide action (tax_rule_set_publish), which
+// concerns no organisation. Provisional (founder question O2-9): go-auth's verifier requires a
+// non-empty org, so the platform kinds carry this fixed value and the executing service passes it
+// as the expected org.
+const PlatformOrg = "platform"
+
+// GrantIssuer is the iss claim of a vendor approval grant: identity's vendor realm. The executing
+// service's verifier is configured with the same value (token.VendorIssuer).
+const GrantIssuer = "hostry-identity-vendor"
+
+// grantAudience is the executing service of a grant kind (the aud claim, ADR-0014 A2.6 item 1).
+func grantAudience(kind string) string {
+	if kind == "tax_rule_set_publish" {
+		return "billing"
 	}
-	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return "sha256:" + hex.EncodeToString(sum[:])
+	return "tenancy"
+}
+
+// GrantSubjectHash is the subject hash of ADR-0014 A2.6 item 2: SHA-256, lower-case hex, over the kind
+// and its fields joined by single newlines. org_*: the organisation id and the status the kind sets;
+// tax_rule_set_publish: rule-set id, content hash and effective date (YYYY-MM-DD). Ids and the hash
+// are lower-cased, as the contract fixes lower-case UUID text and lower-case hex. Only the fields of
+// the kind are read.
+func GrantSubjectHash(kind, org, ruleSetID, contentHash, effectiveDate string) string {
+	if kind == "tax_rule_set_publish" {
+		return auth.SubjectHash(kind, strings.ToLower(ruleSetID), strings.ToLower(contentHash), effectiveDate)
+	}
+	return auth.SubjectHash(kind, strings.ToLower(org), targetStatus(kind))
+}
+
+func (a *vendorApproval) subjectHash() string {
+	return GrantSubjectHash(a.Kind, a.Org, a.RuleSetID, a.RuleSetHash, a.Effective)
+}
+
+// statement is the human-readable subject of the approval, built from the stored fields only (never
+// from requester text), for the approver to read.
+func (a *vendorApproval) statement() string {
+	switch a.Kind {
+	case "org_suspend":
+		return "Suspend organisation " + a.Org
+	case "org_reinstate":
+		return "Reinstate organisation " + a.Org
+	case "org_close":
+		return "Close organisation " + a.Org
+	case "tax_rule_set_publish":
+		return "Publish tax rule set " + a.RuleSetID + " effective " + a.Effective
+	case "device_revoke_over_quota":
+		return "Revoke device " + a.Subject + " of organisation " + a.Org
+	case "sign_in_code":
+		return "Issue a sign-in code for " + maskMobile(a.Mobile)
+	case "owner_recovery":
+		return "Move owner access of organisation " + a.Org + " from " + maskMobile(a.Mobile) + " to " + maskMobile(a.NewMobile)
+	}
+	return ""
 }
 
 func (a *vendorApproval) effective(now time.Time) string {
@@ -95,6 +141,21 @@ func approvalDTOV(a *vendorApproval, now time.Time) gen.VendorApproval {
 	if a.Org != "" {
 		x := a.Org
 		g.OrganisationId = &x
+	}
+	if a.Reason != "" {
+		r := a.Reason
+		g.Reason = &r
+	}
+	if sub := a.statement(); sub != "" {
+		g.Subject = &sub
+	}
+	if a.Kind == "tax_rule_set_publish" && a.RuleSetID != "" {
+		x := a.RuleSetID
+		g.RuleSetId = &x
+	}
+	if a.Kind == "org_close" {
+		x := a.OwnerExportOffered
+		g.OwnerExportOffered = &x
 	}
 	if a.Approver != "" {
 		x := a.Approver
@@ -206,6 +267,7 @@ func (s *Service) CreateVendorApproval(ctx context.Context, in gen.CreateVendorA
 		switch kind {
 		case "org_suspend", "org_reinstate", "org_close":
 			// the executing service (tenancy) checks the organisation's state; nothing more is stored here
+			a.OwnerExportOffered = kind == "org_close" && in.OwnerExportOffered != nil && *in.OwnerExportOffered
 		case "tax_rule_set_publish":
 			a.RuleSetID, a.RuleSetHash, a.Effective = *in.RuleSetId, *in.RuleSetContentHash, in.EffectiveDate.Format("2006-01-02")
 		case "sign_in_code":
@@ -356,7 +418,12 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 		if err != nil || u == nil {
 			return notFoundOr(err)
 		}
-		reissue := grantKind(a.Kind) && a.effective(now) == "approved" && a.Approver == u.ID
+		// Re-issue (security re-review, replay_secret (a)): the approving reply carries a secret (the grant, or the
+		// second half of a sign-in code) that is never stored, so a lost reply is recovered by the same approver
+		// approving again, with a fresh TOTP, while the request is still open. A sign-in code is replaced, so the lost
+		// one stops working.
+		reissue := a.Approver == u.ID && ((grantKind(a.Kind) && a.effective(now) == "approved") ||
+			(a.Kind == "sign_in_code" && a.State == "approved" && !a.Used && now.Before(a.ExpiresAt)))
 		switch {
 		case a.effective(now) != "pending" && !reissue:
 			return approvalConflict("approval_not_pending")
@@ -393,7 +460,7 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 			if a.FirstHalf, err = crypto.Seal(s.Rand, s.Cfg.TOTPKey, []byte(code[:4])); err != nil {
 				return err
 			}
-			a.CodeUntil = now.Add(s.Cfg.SignInCodeTTL)
+			a.CodeUntil, a.Claimed, a.Attempts = now.Add(s.Cfg.SignInCodeTTL), false, 0
 			out.CodeHalf = &gen.CodeHalf{Half: code[4:], Position: gen.Second}
 		case "owner_recovery":
 			a.CompletesAt = now.Add(s.Cfg.RecoveryDelay)
@@ -425,32 +492,94 @@ func (s *Service) ApproveVendorApproval(ctx context.Context, id string, in gen.A
 	return out, refuse
 }
 
-// vendorGrantClaims is the claim set of a vendor approval grant (ADR-0014 A1.3): the approval, what
-// it authorises (kind, organisation or none, subject hash) and the two people involved.
-type vendorGrantClaims struct {
-	Issuer      string `json:"iss"`
-	Audience    string `json:"aud"`
-	Subject     string `json:"sub"` // the approval id
-	Realm       string `json:"realm"`
-	Type        string `json:"typ"`
-	Kind        string `json:"kind"`
-	Org         string `json:"org,omitempty"`
-	Requester   string `json:"requester"`
-	Approver    string `json:"approver"`
-	SubjectHash string `json:"subject_hash"`
-	IssuedAt    int64  `json:"iat"`
-	ExpiresAt   int64  `json:"exp"`
-	JTI         string `json:"jti"`
-}
-
-// GrantTTL is the lifetime of a vendor approval grant.
+// GrantTTL is the lifetime of a vendor approval grant (A2.6: exp = iat + 300 seconds).
 const GrantTTL = 5 * time.Minute
 
+// vendorGrant signs the grant of an approved request: a compact ES256 JWS with go-auth's GrantClaims
+// (ADR-0014 A2.6), which go-auth's GrantVerifier checks in the executing service. It records the
+// approval, what it authorises (kind, org, subject hash) and the two people involved.
 func (s *Service) vendorGrant(a *vendorApproval, now time.Time) (gen.VendorApprovalGrant, error) {
 	exp := now.Add(GrantTTL)
-	tok, err := s.Tokens.VendorGrant(vendorGrantClaims{Issuer: "hostry-identity-vendor", Audience: "hostry-vendor", Subject: a.ID, Realm: "vendor", Type: "vendor_approval",
-		Kind: a.Kind, Org: a.Org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(), IssuedAt: now.Unix(), ExpiresAt: exp.Unix(), JTI: string(s.NewID())})
+	org := a.Org
+	if a.Kind == "tax_rule_set_publish" {
+		org = PlatformOrg
+	}
+	jti := string(s.NewID())
+	a.GrantJTI = jti
+	tok, err := s.Tokens.VendorGrant(auth.GrantClaims{Issuer: GrantIssuer, Realm: auth.RealmVendor, Audience: grantAudience(a.Kind), Type: auth.GrantType,
+		JTI: jti, ApprovalID: a.ID, Kind: a.Kind, Org: org, Requester: a.Requester, Approver: a.Approver, SubjectHash: a.subjectHash(),
+		IssuedAt: now.Unix(), ExpiresAt: exp.Unix()})
 	return gen.VendorApprovalGrant{Token: tok, ExpiresAt: exp}, err
+}
+
+// NotExecutableError is 409 approval_not_executable with the refining reason (not_approved, lapsed,
+// executed, not_approver or not_grantable); the api layer adds reason to the problem body.
+type NotExecutableError struct{ Reason string }
+
+// Error implements error.
+func (e *NotExecutableError) Error() string { return "approval not executable: " + e.Reason }
+
+// Unwrap lets the generic problem mapping see a 409 with the stable code.
+func (e *NotExecutableError) Unwrap() error {
+	return apperr.New(apperr.Conflict, "approval_not_executable", "the approval cannot be executed")
+}
+
+func notExecutable(reason string) error { return &NotExecutableError{Reason: reason} }
+
+// IssueVendorApprovalGrant issues a fresh single-use grant for an approval that is still approved, for
+// when the executing service refused the first grant or it lapsed unused (ADR-0014 A2.5 item 4). Only
+// the approver of the record may ask, while still holding the kind's approve permission and still
+// eligible. The subject hash is recomputed from the stored fields. The issue is audited with the
+// approval id and the new jti; the previous grant's jti is replaced as the live one.
+func (s *Service) IssueVendorApprovalGrant(ctx context.Context, id string) (gen.VendorApprovalGrant, error) {
+	pr, err := s.vendorPrincipal(ctx)
+	if err != nil {
+		return gen.VendorApprovalGrant{}, err
+	}
+	var out gen.VendorApprovalGrant
+	err = s.Store.Tx(ctx, repository.Global, func(tx repository.Tx) error {
+		a, err := get[vendorApproval](tx, kVendorAppr, repository.Global, id)
+		if err != nil || a == nil {
+			return notFoundOr(err)
+		}
+		_, ap := kindPerms(a.Kind)
+		if !s.holdsVendorPerm(ctx, ap) {
+			return s.approvalDenied()
+		}
+		auth.SetAuditTarget(ctx, a.ID)
+		now := s.now()
+		switch {
+		case !grantKind(a.Kind):
+			return notExecutable("not_grantable")
+		case a.State == "completed":
+			return notExecutable("executed")
+		case a.State == "approved" && !now.Before(a.ExpiresAt):
+			return notExecutable("lapsed")
+		case a.State != "approved":
+			if a.effective(now) == "expired" {
+				return notExecutable("lapsed")
+			}
+			return notExecutable("not_approved")
+		case a.Approver != pr.VendorUser():
+			return notExecutable("not_approver")
+		}
+		u, err := get[vendorUser](tx, kVendorUser, repository.Global, pr.VendorUser())
+		if err != nil || u == nil {
+			return notFoundOr(err)
+		}
+		if u.Status != "active" || now.Sub(u.CredAt) < s.Cfg.MinApproverAge {
+			return notExecutable("not_approver")
+		}
+		out, err = s.vendorGrant(a, now)
+		if err != nil {
+			return err
+		}
+		if err := put(tx, kVendorAppr, repository.Global, a.ID, a, keys{k1: a.Org, k2: a.Requester}); err != nil {
+			return err
+		}
+		return s.vendorAudit(ctx, tx, vaudit{Org: a.Org, Action: "vendor.approval.grant_issued", Target: a.ID, Ticket: a.Ticket, Summary: "grant " + a.GrantJTI})
+	})
+	return out, err
 }
 
 // GetVendorApproval returns an approval to the vendor user who requested it or may approve it;

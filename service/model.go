@@ -19,6 +19,9 @@ type catalogueEntry struct {
 func NewCatalogue(extra ...string) (*auth.Catalogue, error) {
 	ps := make([]auth.Permission, 0, len(catalogueEntries)+len(extra))
 	for _, k := range extra {
+		if PermissionRealm(k) != "" { // now in the generated catalogue (a product permission that was promoted)
+			continue
+		}
 		ps = append(ps, auth.Permission{Name: k, Owner: "product"})
 	}
 	for _, e := range catalogueEntries {
@@ -117,10 +120,12 @@ type device struct {
 	ID         string     `json:"id"`
 	TenantID   string     `json:"tenant_id"`
 	OutletID   string     `json:"outlet_id"`
+	BrandID    string     `json:"brand_id,omitempty"` // read from tenancy at activation, signed into the credential, never re-read (ADR-0014 A3.4)
 	Kind       string     `json:"kind"`
 	Name       string     `json:"name"`
 	State      string     `json:"state"` // active, revoked, drained, wiped, lost
 	KeyProt    string     `json:"key_protection"`
+	Store      string     `json:"store,omitempty"` // protected or unprotected, declared at activation, fixed for the life of the id (ADR-0002 A3.5); absent on a row from before it, read as unprotected
 	Billing    string     `json:"billing_capability"`
 	Key        crypto.JWK `json:"key"`
 	Thumb      string     `json:"thumb"`
@@ -136,6 +141,32 @@ type device struct {
 	// marks a billing device that registered while its outlet's tax registration was not verified.
 	Series        []devSeries `json:"series,omitempty"`
 	RegUnverified bool        `json:"registration_unverified,omitempty"`
+	// Recovers is the old device this one adopted by key-loss recovery (ADR-0002 A1.3).
+	Recovers string `json:"recovers,omitempty"`
+	// DrainStmtHash is the SHA-256 (hex) of the canonical device-signed drain statement the drain rests on
+	// (ADR-0005 A3.3); the wipe order quotes it. DrainSeries is the last number per series as the device stated it.
+	DrainStmtHash string        `json:"drain_statement_hash,omitempty"`
+	DrainSeries   []drainSeries `json:"drain_series,omitempty"`
+}
+
+// drainSeries is the last number of one series as the device's own statement gave it (ADR-0005 A3.3).
+type drainSeries struct {
+	SeriesID   string `json:"series_id"`
+	Code       string `json:"code,omitempty"`
+	FY         string `json:"fy"`
+	LastNumber int64  `json:"last_number"`
+}
+
+// deviceRecovery is the key-loss recovery record of an old device (ADR-0002 A1.3; ADR-0005 A3.2 row 4). It never
+// holds the recovery code.
+type deviceRecovery struct {
+	ID          string    `json:"id"`
+	TenantID    string    `json:"tenant_id"`
+	OldDeviceID string    `json:"old_device_id"`
+	NewDeviceID string    `json:"new_device_id"`
+	ApproverID  string    `json:"approver_id"`
+	RecoveredAt time.Time `json:"recovered_at"`
+	Closed      bool      `json:"closed,omitempty"`
 }
 
 type stream struct {
@@ -151,6 +182,21 @@ type packHist struct {
 	Digest  string    `json:"digest"`
 	Series  []string  `json:"series"`
 	At      time.Time `json:"at"`
+	Until   time.Time `json:"until,omitempty"` // offline_valid_until of the pack
+	// Grants is the digest of the permission sets the pack granted (a packGrants document, stored once per digest).
+	Grants string `json:"grants,omitempty"`
+}
+
+// packGrants are the permission sets of one pack version, keyed by their digest so identical sets of
+// successive packs are stored once (ADR-0005 A3.2: the pack-history digest alone cannot answer getPackGrants).
+type packGrants struct {
+	ID      string        `json:"id"` // digest
+	Members []memberPerms `json:"members"`
+}
+
+type memberPerms struct {
+	MemberID    string   `json:"member_id"`
+	Permissions []string `json:"permissions"`
 }
 
 // holdings computes what a member effectively holds: per permission, the outlets (grantlimit).

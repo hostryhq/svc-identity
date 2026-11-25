@@ -16,6 +16,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActivationCodeSummaryState.
+const (
+	ActivationCodeSummaryStateLapsed   ActivationCodeSummaryState = "lapsed"
+	ActivationCodeSummaryStatePending  ActivationCodeSummaryState = "pending"
+	ActivationCodeSummaryStateRedeemed ActivationCodeSummaryState = "redeemed"
+	ActivationCodeSummaryStateRevoked  ActivationCodeSummaryState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ActivationCodeSummaryState enum.
+func (e ActivationCodeSummaryState) Valid() bool {
+	switch e {
+	case ActivationCodeSummaryStateLapsed:
+		return true
+	case ActivationCodeSummaryStatePending:
+		return true
+	case ActivationCodeSummaryStateRedeemed:
+		return true
+	case ActivationCodeSummaryStateRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApprovalKind.
 const (
 	ApprovalKindDeviceRevokeOverQuota ApprovalKind = "device_revoke_over_quota"
@@ -43,6 +67,30 @@ func (e ApprovalKind) Valid() bool {
 	case ApprovalKindSignInCode:
 		return true
 	case ApprovalKindTaxRuleSetPublish:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApprovalRequestRequestMethod.
+const (
+	ApprovalRequestRequestMethodDELETE ApprovalRequestRequestMethod = "DELETE"
+	ApprovalRequestRequestMethodPATCH  ApprovalRequestRequestMethod = "PATCH"
+	ApprovalRequestRequestMethodPOST   ApprovalRequestRequestMethod = "POST"
+	ApprovalRequestRequestMethodPUT    ApprovalRequestRequestMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalRequestRequestMethod enum.
+func (e ApprovalRequestRequestMethod) Valid() bool {
+	switch e {
+	case ApprovalRequestRequestMethodDELETE:
+		return true
+	case ApprovalRequestRequestMethodPATCH:
+		return true
+	case ApprovalRequestRequestMethodPOST:
+		return true
+	case ApprovalRequestRequestMethodPUT:
 		return true
 	default:
 		return false
@@ -162,22 +210,22 @@ func (e CodeHalfPosition) Valid() bool {
 
 // Defines values for CreateApprovalRequestRequestMethod.
 const (
-	DELETE CreateApprovalRequestRequestMethod = "DELETE"
-	PATCH  CreateApprovalRequestRequestMethod = "PATCH"
-	POST   CreateApprovalRequestRequestMethod = "POST"
-	PUT    CreateApprovalRequestRequestMethod = "PUT"
+	CreateApprovalRequestRequestMethodDELETE CreateApprovalRequestRequestMethod = "DELETE"
+	CreateApprovalRequestRequestMethodPATCH  CreateApprovalRequestRequestMethod = "PATCH"
+	CreateApprovalRequestRequestMethodPOST   CreateApprovalRequestRequestMethod = "POST"
+	CreateApprovalRequestRequestMethodPUT    CreateApprovalRequestRequestMethod = "PUT"
 )
 
 // Valid indicates whether the value is a known member of the CreateApprovalRequestRequestMethod enum.
 func (e CreateApprovalRequestRequestMethod) Valid() bool {
 	switch e {
-	case DELETE:
+	case CreateApprovalRequestRequestMethodDELETE:
 		return true
-	case PATCH:
+	case CreateApprovalRequestRequestMethodPATCH:
 		return true
-	case POST:
+	case CreateApprovalRequestRequestMethodPOST:
 		return true
-	case PUT:
+	case CreateApprovalRequestRequestMethodPUT:
 		return true
 	default:
 		return false
@@ -262,6 +310,24 @@ func (e DeviceKind) Valid() bool {
 	}
 }
 
+// Defines values for DeviceRecoveryState.
+const (
+	DeviceRecoveryStateClosed DeviceRecoveryState = "closed"
+	DeviceRecoveryStateOpen   DeviceRecoveryState = "open"
+)
+
+// Valid indicates whether the value is a known member of the DeviceRecoveryState enum.
+func (e DeviceRecoveryState) Valid() bool {
+	switch e {
+	case DeviceRecoveryStateClosed:
+		return true
+	case DeviceRecoveryStateOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeviceState.
 const (
 	DeviceStateActive  DeviceState = "active"
@@ -322,6 +388,48 @@ func (e DeviceTokenTyp) Valid() bool {
 	}
 }
 
+// Defines values for EntitlementSnapshotOrganisationStatus.
+const (
+	EntitlementSnapshotOrganisationStatusActive    EntitlementSnapshotOrganisationStatus = "active"
+	EntitlementSnapshotOrganisationStatusClosed    EntitlementSnapshotOrganisationStatus = "closed"
+	EntitlementSnapshotOrganisationStatusSuspended EntitlementSnapshotOrganisationStatus = "suspended"
+	EntitlementSnapshotOrganisationStatusTrial     EntitlementSnapshotOrganisationStatus = "trial"
+)
+
+// Valid indicates whether the value is a known member of the EntitlementSnapshotOrganisationStatus enum.
+func (e EntitlementSnapshotOrganisationStatus) Valid() bool {
+	switch e {
+	case EntitlementSnapshotOrganisationStatusActive:
+		return true
+	case EntitlementSnapshotOrganisationStatusClosed:
+		return true
+	case EntitlementSnapshotOrganisationStatusSuspended:
+		return true
+	case EntitlementSnapshotOrganisationStatusTrial:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HubPackMemberStatus.
+const (
+	HubPackMemberStatusActive    HubPackMemberStatus = "active"
+	HubPackMemberStatusSuspended HubPackMemberStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the HubPackMemberStatus enum.
+func (e HubPackMemberStatus) Valid() bool {
+	switch e {
+	case HubPackMemberStatusActive:
+		return true
+	case HubPackMemberStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationStatus.
 const (
 	InvitationStatusAccepted  InvitationStatus = "accepted"
@@ -340,6 +448,30 @@ func (e InvitationStatus) Valid() bool {
 	case InvitationStatusExpired:
 		return true
 	case InvitationStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerEnv.
+const (
+	Ci   IssuerEnv = "ci"
+	Dev  IssuerEnv = "dev"
+	Live IssuerEnv = "live"
+	Test IssuerEnv = "test"
+)
+
+// Valid indicates whether the value is a known member of the IssuerEnv enum.
+func (e IssuerEnv) Valid() bool {
+	switch e {
+	case Ci:
+		return true
+	case Dev:
+		return true
+	case Live:
+		return true
+	case Test:
 		return true
 	default:
 		return false
@@ -655,6 +787,24 @@ func (e RequesterVerification) Valid() bool {
 	}
 }
 
+// Defines values for RevocationReason.
+const (
+	RevocationReasonKeyLost RevocationReason = "key_lost"
+	RevocationReasonRevoked RevocationReason = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the RevocationReason enum.
+func (e RevocationReason) Valid() bool {
+	switch e {
+	case RevocationReasonKeyLost:
+		return true
+	case RevocationReasonRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RevocationSubjectType.
 const (
 	RevocationSubjectTypeDevice  RevocationSubjectType = "device"
@@ -709,6 +859,24 @@ func (e StartSupportSessionMode) Valid() bool {
 	case StartSupportSessionModeAct:
 		return true
 	case StartSupportSessionModeView:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StoreProtection.
+const (
+	Protected   StoreProtection = "protected"
+	Unprotected StoreProtection = "unprotected"
+)
+
+// Valid indicates whether the value is a known member of the StoreProtection enum.
+func (e StoreProtection) Valid() bool {
+	switch e {
+	case Protected:
+		return true
+	case Unprotected:
 		return true
 	default:
 		return false
@@ -1032,17 +1200,17 @@ func (e ListAuditEntriesParamsActorKind) Valid() bool {
 
 // ActivateDevice Activate a new device with a code. No OTP is spent and the manager session never touches the device.
 type ActivateDevice struct {
-	// ActivationCode The code from createActivationCode.
+	// ActivationCode The code from createActivationCode, or a recovery code from createDeviceRecoveryCode (then the new device takes the old device's outlet and kind, the old device becomes revoked with reason key_lost and `recovery` is present in the answer).
 	//
 	// Example: 7QK3M9XD
 	ActivationCode string `json:"activation_code"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection KeyProtection `json:"key_protection"`
@@ -1064,6 +1232,11 @@ type ActivateDevice struct {
 
 	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
 	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Optional; absent means `unprotected`, which identity refuses outside HOSTRY_ENV dev, test and ci. Fixed for the life of the device id and signed into the credential (ADR-0002 A3.5 item 1).
+	//
+	// Example: protected
+	Store *StoreProtection `json:"store,omitempty"`
 }
 
 // ActivationCode An activation code; the code itself is shown once.
@@ -1078,7 +1251,7 @@ type ActivationCode struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1088,11 +1261,63 @@ type ActivationCode struct {
 	// Example: pos
 	Kind DeviceKind `json:"kind"`
 
-	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
 }
+
+// ActivationCodePage A page of activation codes.
+type ActivationCodePage struct {
+	// Items Codes on this page.
+	Items []ActivationCodeSummary `json:"items"`
+
+	// NextCursor Opaque cursor for the next page; absent when there are no more results.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// ActivationCodeSummary An activation code without its value, as the owner sees it.
+type ActivationCodeSummary struct {
+	// CreatedAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	CreatedAt Timestamp `json:"created_at"`
+
+	// CreatedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	CreatedBy Id `json:"created_by"`
+
+	// ExpiresAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	ExpiresAt Timestamp `json:"expires_at"`
+
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	Id Id `json:"id"`
+
+	// Kind Device kind (ADR-0005 section 4).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OutletId Id `json:"outlet_id"`
+
+	// State pending (can still be redeemed), revoked, redeemed or lapsed. The list holds pending codes only.
+	//
+	// Example: pending
+	State ActivationCodeSummaryState `json:"state"`
+}
+
+// ActivationCodeSummaryState pending (can still be redeemed), revoked, redeemed or lapsed. The list holds pending codes only.
+//
+// Example: pending
+type ActivationCodeSummaryState string
 
 // ApprovalDecision Result of an approval decision. The approver receives their half once; sign_in_code approvals only.
 type ApprovalDecision struct {
@@ -1102,11 +1327,11 @@ type ApprovalDecision struct {
 	// CodeHalf Half of a vendor-assisted sign-in code, shown once. The requester gets characters 1 to 4, the approver 5 to 8.
 	CodeHalf *CodeHalf `json:"code_half,omitempty"`
 
-	// Grant Signed, single-use grant (vendor realm, type vendor_approval, 5 minutes) for the kinds executed by another service (ADR-0014 A1.3). Its claims are the approval id, kind, organisation or none, requester, approver and a subject hash over the fields named per kind: organisation id and target status for org_suspend, org_reinstate and org_close; rule-set id, content hash and effective date for tax_rule_set_publish. The admin service passes it to the executing service and never to the browser. If the executor refuses, the approval stays approved and a fresh grant can be issued until it lapses.
+	// Grant Signed, single-use grant (vendor realm, type vendor_approval, 5 minutes) for the kinds executed by another service (ADR-0014 A1.3). Its claims are the approval id, kind, organisation (the literal platform for tax_rule_set_publish), requester, approver and a subject hash over the fields named per kind: organisation id and target status for org_suspend, org_reinstate and org_close; rule-set id, content hash and effective date for tax_rule_set_publish. The admin service passes it to the executing service and never to the browser. If the executor refuses, the approval stays approved and a fresh grant can be issued with issueVendorApprovalGrant until the approval lapses.
 	Grant *VendorApprovalGrant `json:"grant,omitempty"`
 }
 
-// ApprovalKind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation.
+// ApprovalKind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation (its grant carries org platform).
 //
 // Example: sign_in_code
 type ApprovalKind string
@@ -1133,7 +1358,7 @@ type ApprovalRequest struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1143,26 +1368,34 @@ type ApprovalRequest struct {
 	// Example: createMember
 	OperationId string `json:"operation_id"`
 
-	// RequestMethod HTTP method the approval is bound to.
+	// RequestMethod HTTP method the approval is bound to (claim th).
 	//
 	// Example: POST
-	RequestMethod *string `json:"request_method,omitempty"`
+	RequestMethod ApprovalRequestRequestMethod `json:"request_method"`
 
-	// RequestPath Concrete path the approval is bound to.
+	// RequestPath Concrete path, with its ids exactly as the repeated request will send it and no query string, that the approval is bound to (claim th).
 	//
 	// Example: /v1/members
-	RequestPath *string `json:"request_path,omitempty"`
+	RequestPath string `json:"request_path"`
 
 	// State Request state.
 	//
 	// Example: pending
 	State ApprovalRequestState `json:"state"`
 
-	// Subject Human-readable summary of what the approver is approving, built by identity from the stored operation, method, path and body (for example "Add member Sita"), never from requester text.
+	// Subject Human-readable statement of what will happen, built by identity from the stored operation (never from requester text) and shown to the approver.
 	//
-	// Example: Create member
-	Subject *string `json:"subject,omitempty"`
+	// Example: Add member Latha (Cashier at Main Restaurant)
+	Subject string `json:"subject"`
+
+	// TargetHash Optional echo of the whole-target hash (claim th): "sha256:" and the lower-case hex SHA-256 over the UTF-8 text request_method, newline, request_path, newline, the 64 hex digits of body_hash without its prefix. The token releases only a request whose method, path and body reproduce it (security review H1).
+	TargetHash *string `json:"target_hash,omitempty"`
 }
+
+// ApprovalRequestRequestMethod HTTP method the approval is bound to (claim th).
+//
+// Example: POST
+type ApprovalRequestRequestMethod string
 
 // ApprovalRequestState Request state.
 //
@@ -1188,7 +1421,7 @@ type ApproveVendorApproval struct {
 
 // AssignmentInput Assign a role at a scope.
 type AssignmentInput struct {
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1196,7 +1429,7 @@ type AssignmentInput struct {
 	// OutletIds Outlets the assignment covers; absent or empty means the whole organisation.
 	OutletIds *[]Id `json:"outlet_ids,omitempty"`
 
-	// RoleId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// RoleId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RoleId Id `json:"role_id"`
@@ -1232,12 +1465,12 @@ type Binding struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	CreatedAt Timestamp `json:"created_at"`
 
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1305,7 +1538,7 @@ type CreateActivationCode struct {
 	// Example: pos
 	Kind DeviceKind `json:"kind"`
 
-	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -1326,7 +1559,7 @@ type CreateApprovalRequest struct {
 	// Example: POST
 	RequestMethod CreateApprovalRequestRequestMethod `json:"request_method"`
 
-	// RequestPath Concrete path of the refused request, with every path parameter filled in (for example /v1/members/0198a000-0000-7000-8000-000000000001/owner-role), as it will be sent. The approval token is bound to method, this path and the body (claim th), so an approval for one resource cannot release the same operation on another.
+	// RequestPath Concrete path of the refused request, with every path parameter filled in (for example /v1/members/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a9e/owner-role), as it will be sent. The approval token is bound to method, this path and the body (claim th), so an approval for one resource cannot release the same operation on another.
 	//
 	// Example: /v1/members
 	RequestPath string `json:"request_path"`
@@ -1344,7 +1577,7 @@ type CreateMember struct {
 	// Example: Asha
 	DisplayName string `json:"display_name"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1360,7 +1593,7 @@ type CreateMember struct {
 
 // CreateOtpChallenge Request to start an owner or manager OTP sign-in. The response never reveals whether the number is known.
 type CreateOtpChallenge struct {
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1389,7 +1622,7 @@ type CreateOwnerInvitation struct {
 
 // CreateSession Exchange a verified OTP, or a vendor-assisted sign-in code, for a session.
 type CreateSession struct {
-	// ChallengeId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// ChallengeId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ChallengeId Id `json:"challenge_id"`
@@ -1404,7 +1637,7 @@ type CreateSession struct {
 	// Example: assertion.example
 	DeviceAssertion string `json:"device_assertion"`
 
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1427,7 +1660,7 @@ type CreateVendorApproval struct {
 	// Example: 2026-12-01
 	EffectiveDate *openapi_types.Date `json:"effective_date,omitempty"`
 
-	// Kind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation.
+	// Kind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation (its grant carries org platform).
 	//
 	// Example: sign_in_code
 	Kind ApprovalKind `json:"kind"`
@@ -1442,10 +1675,15 @@ type CreateVendorApproval struct {
 	// Example: +919876543210
 	NewMobileE164 *MobileE164 `json:"new_mobile_e164,omitempty"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId *Id `json:"organisation_id,omitempty"`
+
+	// OwnerExportOffered org_close only: the requester confirms the owner was offered an export (BR-A1-72); recorded with the approval and echoed on the record so the approver sees it.
+	//
+	// Example: true
+	OwnerExportOffered *bool `json:"owner_export_offered,omitempty"`
 
 	// Reason Free-text reason, 10 to 500 characters. Stays with the owning record; never placed in events.
 	//
@@ -1457,12 +1695,12 @@ type CreateVendorApproval struct {
 	// Example: sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8
 	RuleSetContentHash *string `json:"rule_set_content_hash,omitempty"`
 
-	// RuleSetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// RuleSetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RuleSetId *Id `json:"rule_set_id,omitempty"`
 
-	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SubjectId *Id `json:"subject_id,omitempty"`
@@ -1490,7 +1728,7 @@ type CreateVendorUser struct {
 	// Example: staff@example.invalid
 	Email openapi_types.Email `json:"email"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1521,12 +1759,12 @@ type Device struct {
 	// Example: active
 	BillingCapability BillingCapability `json:"billing_capability"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection KeyProtection `json:"key_protection"`
@@ -1546,7 +1784,7 @@ type Device struct {
 	// Example: Counter 1
 	Name string `json:"name"`
 
-	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -1560,6 +1798,11 @@ type Device struct {
 	//
 	// Example: active
 	State DeviceState `json:"state"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store *StoreProtection `json:"store,omitempty"`
 }
 
 // DeviceActivation A newly registered device with its first offline pack.
@@ -1569,6 +1812,55 @@ type DeviceActivation struct {
 
 	// OfflinePack A signed offline pack. Clients verify jws and use only its payload.
 	OfflinePack OfflinePack `json:"offline_pack"`
+
+	// Recovery Present only when the code was a recovery code: the record that ties the new device to the old one (state open).
+	Recovery *DeviceRecovery `json:"recovery,omitempty"`
+}
+
+// DeviceCredential The identity-signed credential of a device as the offline pack carries it (ADR-0005 A3.2 row 1). `not_after` is not part of this answer; the gateway ignores it. `brand_id` and `store` are always present (ADR-0014 A3.4, ADR-0002 A3.5 item 1); the gateway's cache has no expiry because both are fixed for the life of the device id.
+type DeviceCredential struct {
+	// BrandId Brand of the outlet, read from tenancy when the device was activated, stored on the device row and signed into the credential; never re-read (ADR-0014 A3.4). The gateway caches the credential with no expiry and judges a device's stream binding from it, not from a tenancy call.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	BrandId Id `json:"brand_id"`
+
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	DeviceId Id `json:"device_id"`
+
+	// Kid Key id.
+	//
+	// Example: dev-4a5e-1
+	Kid string `json:"kid"`
+
+	// Kind Device kind (ADR-0005 section 4).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OutletId Id `json:"outlet_id"`
+
+	// Pub Uncompressed X9.62 P-256 point, base64url (the sync wire form of the key).
+	Pub string `json:"pub"`
+
+	// Recovers Old device this one adopted by key-loss recovery (ADR-0002 A1.3).
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	Recovers *Id `json:"recovers,omitempty"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store StoreProtection `json:"store"`
+
+	// TenantId Organisation.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	TenantId Id `json:"tenant_id"`
 }
 
 // DeviceGrant Device token request for unattended devices (KDS, hub): the device role applies.
@@ -1578,7 +1870,7 @@ type DeviceGrant struct {
 	// Example: assertion.example
 	Assertion string `json:"assertion"`
 
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -1621,6 +1913,44 @@ type DevicePage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// DeviceRecovery A key-loss recovery record (ADR-0002 A1.3; ADR-0005 A3.2 row 4). Never carries the recovery code.
+type DeviceRecovery struct {
+	// ApproverId Member who approved the recovery.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	ApproverId Id `json:"approver_id"`
+
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	Id Id `json:"id"`
+
+	// NewDeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	NewDeviceId Id `json:"new_device_id"`
+
+	// OldDeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OldDeviceId Id `json:"old_device_id"`
+
+	// RecoveredAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	RecoveredAt Timestamp `json:"recovered_at"`
+
+	// State open until the old device's drain is recorded, then closed.
+	//
+	// Example: open
+	State DeviceRecoveryState `json:"state"`
+}
+
+// DeviceRecoveryState open until the old device's drain is recorded, then closed.
+//
+// Example: open
+type DeviceRecoveryState string
+
 // DeviceState Device lifecycle state: active, then revoked, then drained, then wiped; or revoked, then lost.
 //
 // Example: active
@@ -1638,7 +1968,7 @@ type DeviceToken struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId *Id `json:"session_id,omitempty"`
@@ -1676,10 +2006,76 @@ type DrainRequest struct {
 	// Example: assertion.example
 	Assertion string `json:"assertion"`
 
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
+}
+
+// DrainSeries The last document number of one series, as the device stated it.
+type DrainSeries struct {
+	// Fy Financial year, four digits.
+	//
+	// Example: 2627
+	Fy string `json:"fy"`
+
+	// LastNumber Last running number the device allocated from the series; 0 when it never used it.
+	//
+	// Example: 123
+	LastNumber int `json:"last_number"`
+
+	// SeriesId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	SeriesId Id `json:"series_id"`
+}
+
+// DrainStatement The device-signed list of everything a revoked device holds and its last document numbers (ADR-0005 A3.3, domain tag `hostry-drain-v1`). Ordinary drain: `by` = `origin`, signed with the revoked device's key. Key loss: `by` = the adopting device, `rec` = the recovery id, signed with the new key.
+type DrainStatement struct {
+	// At Signing time, RFC 3339 UTC.
+	At string `json:"at"`
+
+	// By Signing device id.
+	By string `json:"by"`
+
+	// Kid Signing key id.
+	Kid string `json:"kid"`
+
+	// Origin The drained device.
+	Origin string `json:"origin"`
+
+	// Rec Recovery record id (key loss only).
+	Rec *string `json:"rec,omitempty"`
+
+	// Series Every series in the device's pack, in the fields of a `series_close` record; 0 when never used.
+	Series []struct {
+		// Code Three-character series code.
+		Code string `json:"code"`
+
+		// Fy Financial year, four digits.
+		Fy string `json:"fy"`
+
+		// LastNumber Last running number allocated from the series, 0 when never used.
+		LastNumber int64 `json:"last_number"`
+
+		// SeriesId Series id.
+		SeriesId string `json:"series_id"`
+	} `json:"series"`
+
+	// Sig ES256 of "hostry-drain-v1\n" + canonical JSON of the statement without `sig`.
+	Sig string `json:"sig"`
+
+	// Streams Every stream in which the device's log holds an own-origin op, with its head.
+	Streams []struct {
+		// H Hash of that op.
+		H string `json:"h"`
+
+		// Seq Last own-origin seq in the stream.
+		Seq int64 `json:"seq"`
+
+		// Stream Stream.
+		Stream string `json:"stream"`
+	} `json:"streams"`
 }
 
 // DrainToken The only credential a revoked device receives: valid 5 minutes for quarantine upload and the wipe-order endpoint.
@@ -1695,7 +2091,158 @@ type DrainToken struct {
 	ExpiresAt Timestamp `json:"expires_at"`
 }
 
-// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+// EntitlementSnapshot What an organisation is entitled to at one moment (ADR-0003 section 7, ADR-0008 S5), the shape carried by tenancy `getEntitlements` and by the `entitlements` claim of the offline pack. It never gates trading (ADR-0014 T10): an absent, stale or expired snapshot changes which optional features an app offers, never whether a sale, print or day close completes. Billing state (overdue, unpaid) is not part of it.
+type EntitlementSnapshot struct {
+	// AsOf Instant the snapshot was read from tenancy, UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	AsOf time.Time `json:"as_of"`
+
+	// EntitlementsV Version of the snapshot, per organisation, increased by every plan change and every organisation status change. A device keeps the highest version it has seen.
+	//
+	// Example: 3
+	EntitlementsV int `json:"entitlements_v"`
+
+	// Features Feature keys granted, sorted. An app ignores a key it does not know and treats a key that is not listed as not granted.
+	Features []string `json:"features"`
+
+	// Limits Quantities the plan includes, by name. Informational on a device, a limit is never enforced against a sale. Unknown names are ignored.
+	//
+	// Example: {"outlets":1}
+	Limits map[string]int `json:"limits"`
+
+	// OrganisationStatus Lifecycle status of the organisation. `suspended` takes effect on a device only when it holds no day in progress (ADR-0014 A1.2, BR-A1-71).
+	//
+	// Example: active
+	OrganisationStatus EntitlementSnapshotOrganisationStatus `json:"organisation_status"`
+
+	// PlanKey Plan key of the current subscription. Absent when the organisation has no subscription.
+	//
+	// Example: table_service
+	PlanKey *string `json:"plan_key,omitempty"`
+
+	// PlanVersion Plan version of the current subscription. Absent when there is no subscription.
+	//
+	// Example: 1
+	PlanVersion *int `json:"plan_version,omitempty"`
+
+	// ValidUntil Instant after which the snapshot is stale and the device refreshes it when online. Absent in A1 because plan entitlements carry no expiry (BR-A1-61). Stale never removes a feature or blocks trading.
+	//
+	// Example: 2026-12-31T00:00:00Z
+	ValidUntil *time.Time `json:"valid_until,omitempty"`
+}
+
+// EntitlementSnapshotOrganisationStatus Lifecycle status of the organisation. `suspended` takes effect on a device only when it holds no day in progress (ADR-0014 A1.2, BR-A1-71).
+//
+// Example: active
+type EntitlementSnapshotOrganisationStatus string
+
+// HubPackClaims Payload of the signed offline pack of a device of kind `hub` (ADR-0002 A3.4 item 3). Holds its LAN credential, `pack_v`, member ids with status and permissions, the outlet's revoked device ids, the intent table version, the current and next identity keys, the gateway's op-signing key, `issued_at` and `offline_valid_until`. It never holds display names, PIN verifiers or salts, series codes or manual books, so it carries no secret and the hub may show it to a device it refuses as revoked (ADR-0005 section 4 item 2). The hub fetches it at every cloud contact with a device-key assertion (getDeviceOfflinePack) and never hands packs to devices.
+//
+// Example: {"device":{"brand_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6a","credential":"cred.jws.example","device_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f","kid":"dev-4a5f-1","kind":"hub","outlet_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61","public_key":{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"store":"protected"},"identity_public_keys":[{"alg":"ES256","crv":"P-256","kid":"k-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}],"intent_table_version":3,"issued_at":"2026-11-24T13:05:11.120Z","issuer_env":"dev","members":[{"member_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64","permissions":["order.create"],"status":"active"}],"offline_valid_until":"2026-12-08T13:05:11.120Z","op_signing_public_key":{"alg":"ES256","crv":"P-256","kid":"o-2026-09","kty":"EC","use":"sig","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"organisation_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60","pack_v":7,"peers":[{"credential":"cred.jws.example","device_id":"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e","kid":"dev-4a5e-1","kind":"pos","public_key":{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"},"store":"protected"}],"revoked_device_ids":[]}
+type HubPackClaims struct {
+	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
+	Device PackDevice `json:"device"`
+
+	// IdentityPublicKeys Current and next identity public keys.
+	IdentityPublicKeys []Jwk `json:"identity_public_keys"`
+
+	// IntentTableVersion Version of the signed intent table.
+	//
+	// Example: 3
+	IntentTableVersion int `json:"intent_table_version"`
+
+	// IssuedAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	IssuedAt Timestamp `json:"issued_at"`
+
+	// IssuerEnv The environment of the identity that signed the pack (its HOSTRY_ENV), claimed in every pack. A build that is not a development build refuses a pack whose `issuer_env` is not `live`; a browser build refuses any pack whose `issuer_env` is not `dev` when it is itself a development build, and refuses every non-`live` issuer otherwise. The claim is signed with the pack, so a pack from a dev issuer cannot pass for a live one.
+	//
+	// Example: dev
+	IssuerEnv IssuerEnv `json:"issuer_env"`
+
+	// Members Members allowed at the outlet, ids only.
+	Members []HubPackMember `json:"members"`
+
+	// OfflineValidUntil RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	OfflineValidUntil Timestamp `json:"offline_valid_until"`
+
+	// OpSigningPublicKey One published signing key (RFC 7517).
+	OpSigningPublicKey Jwk `json:"op_signing_public_key"`
+
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OrganisationId Id `json:"organisation_id"`
+
+	// PackV Pack version.
+	//
+	// Example: 7
+	PackV int `json:"pack_v"`
+
+	// Peers The other devices of the outlet as identity knows them at issue (active, not revoked, any kind but `hub`), so a device can relay to a peer tablet-to-tablet with no cloud contact first. Each entry is the same data as that peer's own `PackDevice`; an entry holds no member data. A peer revoked later is learned from `revoked_device_ids` of a newer pack or from the cloud.
+	Peers []HubPackPeer `json:"peers"`
+
+	// RevokedDeviceIds Revoked device ids for the outlet.
+	RevokedDeviceIds []Id `json:"revoked_device_ids"`
+}
+
+// HubPackMember A member as a hub pack lists it, for the structural checks of ADR-0002 S8 only. No display name, PIN salt, verifier or version; a hub holds nothing a PIN guess could use.
+type HubPackMember struct {
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	MemberId Id `json:"member_id"`
+
+	// Permissions Effective permission strings at this outlet.
+	Permissions []string `json:"permissions"`
+
+	// Status Member state.
+	//
+	// Example: active
+	Status HubPackMemberStatus `json:"status"`
+}
+
+// HubPackMemberStatus Member state.
+//
+// Example: active
+type HubPackMemberStatus string
+
+// HubPackPeer A peer device of the hub's outlet as a hub pack lists it, so offline tablet-to-tablet relay needs no cloud contact first. The same facts as the peer's `PackDevice`, without its outlet and brand (those are the hub's).
+type HubPackPeer struct {
+	// Credential The peer's identity-signed LAN credential as a compact JWS (as `PackDevice.credential`), with `not_after` = this pack's `offline_valid_until`.
+	//
+	// Example: cred.jws.example
+	Credential string `json:"credential"`
+
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	DeviceId Id `json:"device_id"`
+
+	// Kid Key id of the peer's own credential (one key per device id for life, ADR-0002 S7).
+	//
+	// Example: dev-4a5e-1
+	Kid string `json:"kid"`
+
+	// Kind Device kind (ADR-0005 section 4).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
+	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store StoreProtection `json:"store"`
+}
+
+// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 //
 // Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 type Id = string
@@ -1704,6 +2251,11 @@ type Id = string
 //
 // Example: pending
 type InvitationStatus string
+
+// IssuerEnv The environment of the identity that signed the pack (its HOSTRY_ENV), claimed in every pack. A build that is not a development build refuses a pack whose `issuer_env` is not `live`; a browser build refuses any pack whose `issuer_env` is not `dev` when it is itself a development build, and refuses every non-`live` issuer otherwise. The claim is signed with the pack, so a pack from a dev issuer cannot pass for a live one.
+//
+// Example: dev
+type IssuerEnv string
 
 // Jwk One published signing key (RFC 7517).
 type Jwk struct {
@@ -1769,7 +2321,7 @@ type Jwks struct {
 	Keys []Jwk `json:"keys"`
 }
 
-// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 //
 // Example: hardware
 type KeyProtection string
@@ -1791,7 +2343,7 @@ type Member struct {
 	// Example: true
 	HasPin bool `json:"has_pin"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1800,6 +2352,9 @@ type Member struct {
 	//
 	// Example: +91*******210
 	MobileMasked *MobileMasked `json:"mobile_masked,omitempty"`
+
+	// NewDeviceCaution True while the member signed in from a binding under caution (a new device, 24 hours; strong-only actions are blocked). Shown to support so the owner can be told why an action is refused.
+	NewDeviceCaution *bool `json:"new_device_caution,omitempty"`
 
 	// RoleAssignments Role assignments.
 	RoleAssignments []RoleAssignment `json:"role_assignments"`
@@ -1815,6 +2370,32 @@ type Member struct {
 // Example: active
 type MemberStatus string
 
+// MemberGrants A member's status and effective permissions at an outlet now (ADR-0005 A3.2 row 3).
+type MemberGrants struct {
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	MemberId Id `json:"member_id"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OutletId Id `json:"outlet_id"`
+
+	// Permissions Effective permission strings at the outlet now; empty for a removed member.
+	Permissions []string `json:"permissions"`
+
+	// RemovedAt When the member was removed, when removed.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	RemovedAt *Timestamp `json:"removed_at,omitempty"`
+
+	// Status Member state (as in a pack).
+	//
+	// Example: active
+	Status string `json:"status"`
+}
+
 // MemberPage A page of members.
 type MemberPage struct {
 	// Items Members on this page.
@@ -1826,12 +2407,12 @@ type MemberPage struct {
 
 // Membership One organisation the signed-in account belongs to.
 type Membership struct {
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -1849,15 +2430,15 @@ type MobileMasked = string
 
 // OfflinePack A signed offline pack. Clients verify jws and use only its payload.
 type OfflinePack struct {
-	// Claims Payload of the signed offline pack (ADR-0005 section 6, A2.6).
-	Claims OfflinePackClaims `json:"claims"`
+	// Claims OfflinePackClaims for every device kind but `hub`; HubPackClaims for a `hub` (ADR-0002 A3.4 item 3).
+	Claims OfflinePack_Claims `json:"claims"`
 
 	// IssuedAt RFC 3339 instant in UTC.
 	//
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
 
-	// Jws Compact ES256 JWS whose payload is OfflinePackClaims.
+	// Jws Compact ES256 JWS whose payload is OfflinePackClaims, or HubPackClaims for a hub. Header `{"alg":"ES256","kid":<kid>,"typ":"hostry-pack+jws"}`; payload = the RFC 8785 JSON of the claims. It is signed with an identity key published in `identity_public_keys` (the claim of every pack: the current and the next key, also served by the identity JWKS), so a hub or device verifies the whole pack with keys it already holds and refuses a pack whose `kid` is not among them. The `credential` strings inside are themselves JWS (`hostry-cred+jws`) under the same keys.
 	//
 	// Example: pack.jws.example
 	Jws string `json:"jws"`
@@ -1873,6 +2454,11 @@ type OfflinePack struct {
 	PackV int `json:"pack_v"`
 }
 
+// OfflinePack_Claims OfflinePackClaims for every device kind but `hub`; HubPackClaims for a `hub` (ADR-0002 A3.4 item 3).
+type OfflinePack_Claims struct {
+	union json.RawMessage
+}
+
 // OfflinePackClaims Payload of the signed offline pack (ADR-0005 section 6, A2.6).
 type OfflinePackClaims struct {
 	// CatalogueVersion Permission catalogue version.
@@ -1880,26 +2466,11 @@ type OfflinePackClaims struct {
 	// Example: 1
 	CatalogueVersion int `json:"catalogue_version"`
 
-	// Device The device's own credential.
-	Device struct {
-		// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
-		//
-		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-		DeviceId Id `json:"device_id"`
+	// Device The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
+	Device PackDevice `json:"device"`
 
-		// Kind Device kind (ADR-0005 section 4).
-		//
-		// Example: pos
-		Kind DeviceKind `json:"kind"`
-
-		// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
-		//
-		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-		OutletId Id `json:"outlet_id"`
-
-		// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
-		PublicKey PublicJwk `json:"public_key"`
-	} `json:"device"`
+	// Entitlements The organisation's entitlement snapshot when the pack was issued (tenancy `getEntitlements`), refreshed into a newer pack on `tenancy.subscription.changed`. Optional so an older pack still validates; an app treats an absent snapshot as "no optional feature known" and still trades (ADR-0014 T10). Never gates a sale, print or day close.
+	Entitlements *EntitlementSnapshot `json:"entitlements,omitempty"`
 
 	// IdentityPublicKeys Current and next identity public keys.
 	IdentityPublicKeys []Jwk `json:"identity_public_keys"`
@@ -1919,6 +2490,14 @@ type OfflinePackClaims struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	IssuedAt Timestamp `json:"issued_at"`
 
+	// IssuerEnv The environment of the identity that signed the pack (its HOSTRY_ENV), claimed in every pack. A build that is not a development build refuses a pack whose `issuer_env` is not `live`; a browser build refuses any pack whose `issuer_env` is not `dev` when it is itself a development build, and refuses every non-`live` issuer otherwise. The claim is signed with the pack, so a pack from a dev issuer cannot pass for a live one.
+	//
+	// Example: dev
+	IssuerEnv IssuerEnv `json:"issuer_env"`
+
+	// ManualBooks The active paper bill books of the device outlet (tenancy `listOutletManualBookSeries`), entry-only. A device refuses to record a typed number whose code is in neither `series` nor here. Absent or empty when the outlet has none.
+	ManualBooks *[]PackManualBook `json:"manual_books,omitempty"`
+
 	// Members Members allowed at the outlet.
 	Members []PackMember `json:"members"`
 
@@ -1930,7 +2509,7 @@ type OfflinePackClaims struct {
 	// OpSigningPublicKey One published signing key (RFC 7517).
 	OpSigningPublicKey Jwk `json:"op_signing_public_key"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -1954,7 +2533,7 @@ type OtpChallenge struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1982,7 +2561,7 @@ type OwnerInvitation struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -1992,7 +2571,7 @@ type OwnerInvitation struct {
 	// Example: +91*******210
 	MobileMasked MobileMasked `json:"mobile_masked"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2035,7 +2614,7 @@ type OwnerRecovery struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	CompletesAt *Timestamp `json:"completes_at,omitempty"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2053,7 +2632,7 @@ type OwnerRecoveryState string
 
 // OwnerRoleAssignment Assign the built-in owner role (step-up, owners only).
 type OwnerRoleAssignment struct {
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2066,7 +2645,7 @@ type OwnerStatus string
 
 // OwnerStatusItem Owner state for one organisation.
 type OwnerStatusItem struct {
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2088,22 +2667,95 @@ type OwnerStatusList struct {
 	Items []OwnerStatusItem `json:"items"`
 }
 
-// PackHistoryCheck Was the member and/or series code issued to the device in the given pack?
-type PackHistoryCheck struct {
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+// PackDevice The device's own credential, as identity signs it for the sync gateway (the same `kid`, `brand_id`, `kind` and `store` as `getDeviceCredential`). The offline shell stamps `kid` into the seals and endorsements it makes and `brand_id` into the stream it may write (ADR-0005 A3.2 row 1, ADR-0014 A3.4). `credential` is the same credential as the LAN credential (ADR-0002 A3.4 item 1); every pack of every kind carries the device's own.
+type PackDevice struct {
+	// BrandId Brand of the outlet, read from tenancy at activation and fixed for the device's life (ADR-0014 A3.4).
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	BrandId Id `json:"brand_id"`
+
+	// Credential The LAN credential: the device's identity-signed credential as a compact JWS (ES256, header typ `hostry-cred+jws` and the identity `kid`; payload the RFC 8785 JSON of the Credential in sync/protocol-v1.md, `LAN credential`), with `not_after` = the pack's `offline_valid_until` and the `store` claim. It holds no member data, so a device may show it to any peer, and a hub may show it to a device it refuses. Re-issued with every pack.
+	//
+	// Example: cred.jws.example
+	Credential string `json:"credential"`
+
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
 
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Kid Key id of the device's own credential, the one the gateway holds for `device_id` (one key per device id for life, ADR-0002 S7). A seal, endorsement or drain statement the device makes names this `kid`.
+	//
+	// Example: dev-4a5e-1
+	Kid string `json:"kid"`
+
+	// Kind Device kind (ADR-0005 section 4).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
-	MemberId *Id `json:"member_id,omitempty"`
+	OutletId Id `json:"outlet_id"`
+
+	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
+	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+	//
+	// Example: protected
+	Store StoreProtection `json:"store"`
+}
+
+// PackGrants What one issued pack version granted to a device (ADR-0005 A3.2 row 2).
+type PackGrants struct {
+	// IssuedAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	IssuedAt Timestamp `json:"issued_at"`
+
+	// Members Each member listed in the pack with the permissions it granted.
+	Members []struct {
+		// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+		//
+		// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+		MemberId Id `json:"member_id"`
+
+		// Permissions Permission strings the pack granted the member at the device outlet.
+		Permissions []string `json:"permissions"`
+	} `json:"members"`
+
+	// OfflineValidUntil RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	OfflineValidUntil Timestamp `json:"offline_valid_until"`
 
 	// PackV Pack version.
 	//
 	// Example: 7
 	PackV int `json:"pack_v"`
+
+	// SeriesCodes Series codes of that pack version.
+	SeriesCodes []string `json:"series_codes"`
+}
+
+// PackHistoryCheck Was the member and/or series code issued to the device in the given pack?
+type PackHistoryCheck struct {
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	DeviceId Id `json:"device_id"`
+
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	MemberId *Id `json:"member_id,omitempty"`
+
+	// PackV Pack version. Absent means any pack issued to the device (ADR-0005 A3.2 row 7; the quarantine case).
+	//
+	// Example: 7
+	PackV *int `json:"pack_v,omitempty"`
 
 	// SeriesCode Series code to look up.
 	//
@@ -2129,6 +2781,19 @@ type PackHistoryVerdict struct {
 	SeriesIssued bool `json:"series_issued"`
 }
 
+// PackManualBook A registered paper bill book the device may type pages from (ADR-0014 A1.6 item 4). Typed, never allocated.
+type PackManualBook struct {
+	// Code The book's own prefix, 1 to 6 capitals and digits, unique per GSTIN.
+	//
+	// Example: BKB
+	Code string `json:"code"`
+
+	// TaxRegistrationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	TaxRegistrationId Id `json:"tax_registration_id"`
+}
+
 // PackMember A member usable at the device outlet. Verifier fields appear only for device kinds that offer PIN login.
 type PackMember struct {
 	// DisplayName Display name; no phone number or account id.
@@ -2136,7 +2801,7 @@ type PackMember struct {
 	// Example: Asha
 	DisplayName string `json:"display_name"`
 
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2175,7 +2840,7 @@ type PackMember struct {
 // Example: active
 type PackMemberStatus string
 
-// PackSeries A document-series code given to the device (ADR-0003 section 1a).
+// PackSeries A document-series code given to the device (ADR-0003 section 1a). A billing device holds an invoice series and a `credit_note` series (tenancy `issueDocumentSeries`), and one entry-only `manual_book` row for every active paper bill book of its outlet, listed apart in `manual_books` (typed, never allocated; sync/protocol-v1.md, Manual-book entries).
 type PackSeries struct {
 	// Code Series code, unique per tax registration.
 	//
@@ -2192,7 +2857,7 @@ type PackSeries struct {
 	// Example: active
 	State PackSeriesState `json:"state"`
 
-	// TaxRegistrationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// TaxRegistrationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	TaxRegistrationId Id `json:"tax_registration_id"`
@@ -2274,7 +2939,7 @@ type PinGrant struct {
 	// Example: assertion.example
 	Assertion string `json:"assertion"`
 
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2284,7 +2949,7 @@ type PinGrant struct {
 	// Example: pin
 	GrantType PinGrantGrantType `json:"grant_type"`
 
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2304,7 +2969,7 @@ type PinGrant struct {
 	// Example: 2
 	PinV int `json:"pin_v"`
 
-	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId Id `json:"session_id"`
@@ -2327,7 +2992,7 @@ type PinResetAuthorisation struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2375,6 +3040,11 @@ type Problem struct {
 	//
 	// Example: /v1/resources/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Instance *string `json:"instance,omitempty"`
+
+	// Reason Optional sub-code that refines `code`, for example approval_not_executable carries not_approved, lapsed, executed, not_approver or subject_changed.
+	//
+	// Example: not_approved
+	Reason *string `json:"reason,omitempty"`
 
 	// RequestId Request ID for log correlation.
 	//
@@ -2427,7 +3097,17 @@ type ProofVerification struct {
 	// Example: sha256:cf03a846706f29a88ba61a212f79e7c224142fdd5df92fc1d7ed8bb1283fb8c8
 	ActionHash *string `json:"action_hash,omitempty"`
 
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// ApprovalId Approval record id (kind approval). Taken, with the fields below, from the approval record of the `approval.grant` op (ADR-0005 section 8, A3.1 item 2); all are bound by the action proof.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	ApprovalId *Id `json:"approval_id,omitempty"`
+
+	// ApprovedAt Time of the approval record (kind approval).
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	ApprovedAt *Timestamp `json:"approved_at,omitempty"`
+
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2437,7 +3117,7 @@ type ProofVerification struct {
 	// Example: session
 	Kind ProofVerificationKind `json:"kind"`
 
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2452,6 +3132,11 @@ type ProofVerification struct {
 	// Example: 7
 	PackV int `json:"pack_v"`
 
+	// Permission Permission the approval cites (kind approval).
+	//
+	// Example: bill.void
+	Permission *string `json:"permission,omitempty"`
+
 	// PinV PIN version of the proof.
 	//
 	// Example: 2
@@ -2462,10 +3147,21 @@ type ProofVerification struct {
 	// Example: proof.example
 	Proof string `json:"proof"`
 
-	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Reason Reason on the approval record (kind approval).
+	Reason *string `json:"reason,omitempty"`
+
+	// RequesterId Member who asked for the approval; equal to member_id for an own sensitive action (kind approval).
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	RequesterId *Id `json:"requester_id,omitempty"`
+
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId *Id `json:"session_id,omitempty"`
+
+	// Target Target record the approval is for (kind approval).
+	Target *string `json:"target,omitempty"`
 }
 
 // ProofVerificationKind Proof kind.
@@ -2513,8 +3209,14 @@ type Reason = string
 
 // RecordDrain Drain report from the sync gateway.
 type RecordDrain struct {
-	// DrainedThrough Sequence stored per device stream.
+	// DrainedThrough Head per device stream, copied from the statement's `streams` (the same streams, the same `seq`).
 	DrainedThrough []StreamSequence `json:"drained_through"`
+
+	// Series The last number per series, copied from the device-signed statement (ADR-0005 A3.3 item 5). Must be exactly the series identity issued to the device (422 drain.series_mismatch, vendor alert, nothing recorded). Empty only for a device that never held a series (kds, hub).
+	Series *[]DrainSeries `json:"series,omitempty"`
+
+	// Statement The device-signed drain statement the report rests on. `series` must list exactly the series identity issued to the device (a billing device holds a pair: its tax-invoice series and its credit-note series), each with the statement's own number.
+	Statement *DrainStatement `json:"statement,omitempty"`
 }
 
 // RecoveryCancellation Cancel a pending owner recovery.
@@ -2525,9 +3227,42 @@ type RecoveryCancellation struct {
 	Reason *string `json:"reason,omitempty"`
 }
 
+// RecoveryCode A key-loss recovery code; the code itself is shown once (ADR-0002 A1.3 item 2).
+type RecoveryCode struct {
+	// Code 8 characters from a 32-symbol alphabet (40 bits), 10 minutes, single use; redeemed at activateDevice.
+	//
+	// Example: 7QK3M9XD
+	Code string `json:"code"`
+
+	// ExpiresAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	ExpiresAt Timestamp `json:"expires_at"`
+
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	Id Id `json:"id"`
+
+	// Kind Kind the new device takes (the old device's).
+	//
+	// Example: pos
+	Kind DeviceKind `json:"kind"`
+
+	// OldDeviceId The device that lost its key; the code is bound to it.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OldDeviceId Id `json:"old_device_id"`
+
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	OutletId Id `json:"outlet_id"`
+}
+
 // RefreshSession Rotate a refresh token. The proof is signed by the device key, so a copied token is useless elsewhere.
 type RefreshSession struct {
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2545,12 +3280,12 @@ type RefreshSession struct {
 
 // RegisterDevice Register a device by a signed-in member holding device.register. Kind and outlet are the registering member's choice and are never taken from a later client claim.
 type RegisterDevice struct {
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection KeyProtection `json:"key_protection"`
@@ -2575,13 +3310,18 @@ type RegisterDevice struct {
 	// Example: sig.example
 	NonceSignature string `json:"nonce_signature"`
 
-	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
 
 	// PublicKey Public key as a JWK (RFC 7517), P-256 only. Private key material is never sent.
 	PublicKey PublicJwk `json:"public_key"`
+
+	// Store Optional; absent means `unprotected`. Fixed for the life of the device id.
+	//
+	// Example: protected
+	Store *StoreProtection `json:"store,omitempty"`
 }
 
 // RejectVendorApproval Reject or cancel an approval.
@@ -2599,22 +3339,32 @@ type RequesterVerification string
 
 // Revocation A device or session revocation (tenant-id-only feed, no personal data).
 type Revocation struct {
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
+
+	// Reason Why a device was revoked (ADR-0005 A3.2 row 5). `key_lost` is a revocation by recovery (the old device of a key-loss recovery) and carries `recovery_id`; absent on a session. The gateway's only source of revocation.
+	//
+	// Example: revoked
+	Reason *RevocationReason `json:"reason,omitempty"`
+
+	// RecoveryId The recovery record, present when reason is key_lost.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	RecoveryId *Id `json:"recovery_id,omitempty"`
 
 	// RevokedAt RFC 3339 instant in UTC.
 	//
 	// Example: 2026-11-24T13:05:11.120Z
 	RevokedAt Timestamp `json:"revoked_at"`
 
-	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SubjectId Id `json:"subject_id"`
@@ -2624,6 +3374,11 @@ type Revocation struct {
 	// Example: device
 	SubjectType RevocationSubjectType `json:"subject_type"`
 }
+
+// RevocationReason Why a device was revoked (ADR-0005 A3.2 row 5). `key_lost` is a revocation by recovery (the old device of a key-loss recovery) and carries `recovery_id`; absent on a session. The gateway's only source of revocation.
+//
+// Example: revoked
+type RevocationReason string
 
 // RevocationSubjectType What was revoked.
 //
@@ -2664,7 +3419,7 @@ type Role struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	CreatedAt Timestamp `json:"created_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2685,7 +3440,7 @@ type Role struct {
 
 // RoleAssignment A member-role-scope assignment.
 type RoleAssignment struct {
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2693,7 +3448,7 @@ type RoleAssignment struct {
 	// OutletIds Outlets the assignment covers; absent means the whole organisation.
 	OutletIds *[]Id `json:"outlet_ids,omitempty"`
 
-	// RoleId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// RoleId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RoleId Id `json:"role_id"`
@@ -2701,7 +3456,7 @@ type RoleAssignment struct {
 
 // RoleInput Create or replace a role. The actor must hold every permission before and after the edit (G1).
 type RoleInput struct {
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id *Id `json:"id,omitempty"`
@@ -2746,7 +3501,7 @@ type Session struct {
 	// Example: false
 	InvitationAccepted bool `json:"invitation_accepted"`
 
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2754,7 +3509,7 @@ type Session struct {
 	// Memberships All organisations of the account; the token is for member_id only.
 	Memberships []Membership `json:"memberships"`
 
-	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SessionId Id `json:"session_id"`
@@ -2763,9 +3518,37 @@ type Session struct {
 	Tokens TokenPair `json:"tokens"`
 }
 
+// SessionFacts Fixed facts of a strong session (ADR-0005 A3.2 row 6). The end arrives on listRevocations.
+type SessionFacts struct {
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	DeviceId *Id `json:"device_id,omitempty"`
+
+	// EndedAt When the session ended or was revoked, when it has.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	EndedAt *Timestamp `json:"ended_at,omitempty"`
+
+	// IssuedAt RFC 3339 instant in UTC.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	IssuedAt Timestamp `json:"issued_at"`
+
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	MemberId Id `json:"member_id"`
+
+	// SessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	SessionId Id `json:"session_id"`
+}
+
 // SetPin Set or change a PIN. The body is excluded from every log and trace.
 type SetPin struct {
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -2775,7 +3558,7 @@ type SetPin struct {
 	// Example: 482915
 	Pin string `json:"pin"`
 
-	// PinResetAuthorisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// PinResetAuthorisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	PinResetAuthorisationId *Id `json:"pin_reset_authorisation_id,omitempty"`
@@ -2793,7 +3576,7 @@ type StartSupportSession struct {
 	// Example: view
 	Mode *StartSupportSessionMode `json:"mode,omitempty"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2813,6 +3596,11 @@ type StartSupportSession struct {
 //
 // Example: view
 type StartSupportSessionMode string
+
+// StoreProtection Whether the device's local store is protected: `protected` is an encrypted store (SQLCipher with a keystore-held key on a device; the hub's column encryption with a tier other than `dev`), `unprotected` anything else (the browser build, a hub with a `dev` key file). Declared by the build at activation, signed into the credential, fixed for the life of the device id (ADR-0002 A3.5 item 1). It is the build's own statement: it guards against a wrong build, not a modified one. Identity refuses `unprotected` outside HOSTRY_ENV dev, test and ci (422 store.unprotected_refused). Another origin's personal data goes only to `protected` devices.
+//
+// Example: protected
+type StoreProtection string
 
 // StreamSequence Highest sequence of one device stream.
 type StreamSequence struct {
@@ -2839,7 +3627,7 @@ type SupportSession struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	EndsAt Timestamp `json:"ends_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2849,7 +3637,7 @@ type SupportSession struct {
 	// Example: view
 	Mode SupportSessionMode `json:"mode"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId Id `json:"organisation_id"`
@@ -2869,7 +3657,7 @@ type SupportSession struct {
 	// Example: SUP-2041
 	TicketReference TicketReference `json:"ticket_reference"`
 
-	// VendorUserId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// VendorUserId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	VendorUserId Id `json:"vendor_user_id"`
@@ -2909,7 +3697,7 @@ type SupportToken struct {
 
 // SwitchMember Request a token for another organisation of the same account (a new token, membership re-read).
 type SwitchMember struct {
-	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// MemberId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	MemberId Id `json:"member_id"`
@@ -2932,7 +3720,7 @@ type TenantAuditEntry struct {
 	// Example: Hostry support
 	ActorLabel string `json:"actor_label"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -2962,12 +3750,12 @@ type TenantAuditEntry struct {
 	// Example: true
 	ShowToOwner bool `json:"show_to_owner"`
 
-	// SupportSessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SupportSessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SupportSessionId *Id `json:"support_session_id,omitempty"`
 
-	// TargetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// TargetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	TargetId *Id `json:"target_id,omitempty"`
@@ -3078,7 +3866,7 @@ type UpdateVendorUserStatus string
 
 // VendorApproval A two-person approval record. Phone numbers appear only masked.
 type VendorApproval struct {
-	// ApprovedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// ApprovedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ApprovedBy *Id `json:"approved_by,omitempty"`
@@ -3098,12 +3886,12 @@ type VendorApproval struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	ExpiresAt Timestamp `json:"expires_at"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// Kind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation.
+	// Kind What the two-person approval authorises. org_suspend, org_reinstate and org_close are executed by tenancy and tax_rule_set_publish by billing, with a vendor approval grant from the approval decision (ADR-0014 A1.3); they lapse after 24 hours, and tax_rule_set_publish concerns no organisation (its grant carries org platform).
 	//
 	// Example: sign_in_code
 	Kind ApprovalKind `json:"kind"`
@@ -3113,22 +3901,40 @@ type VendorApproval struct {
 	// Example: +91*******210
 	MobileMasked *MobileMasked `json:"mobile_masked,omitempty"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId *Id `json:"organisation_id,omitempty"`
 
-	// RequestedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OwnerExportOffered org_close only: whether the requester confirmed the owner was offered an export (BR-A1-72); shown to the approver. Absent for every other kind.
+	//
+	// Example: true
+	OwnerExportOffered *bool `json:"owner_export_offered,omitempty"`
+
+	// Reason The requester's reason, shown to the approver (Admin A0 AC 90).
+	//
+	// Example: Owner phoned to report a lost tablet.
+	Reason *Reason `json:"reason,omitempty"`
+
+	// RequestedBy Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	RequestedBy Id `json:"requested_by"`
+
+	// RuleSetId The tax rule set the approval would publish (tax_rule_set_publish only); absent for every other kind.
+	//
+	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+	RuleSetId *Id `json:"rule_set_id,omitempty"`
 
 	// State Approval state.
 	//
 	// Example: pending
 	State VendorApprovalState `json:"state"`
 
-	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Subject Human-readable statement of what approving will do, built from the stored fields, for example "Suspend organisation 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60". Identity holds no organisation name, so an organisation is named by its id here; the admin panel shows the name beside it from tenancy. The approver is shown this, never requester text.
+	Subject *string `json:"subject,omitempty"`
+
+	// SubjectId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SubjectId *Id `json:"subject_id,omitempty"`
@@ -3149,7 +3955,7 @@ type VendorApproval struct {
 // Example: pending
 type VendorApprovalState string
 
-// VendorApprovalGrant Signed, single-use grant (vendor realm, type vendor_approval, 5 minutes) for the kinds executed by another service (ADR-0014 A1.3). Its claims are the approval id, kind, organisation or none, requester, approver and a subject hash over the fields named per kind: organisation id and target status for org_suspend, org_reinstate and org_close; rule-set id, content hash and effective date for tax_rule_set_publish. The admin service passes it to the executing service and never to the browser. If the executor refuses, the approval stays approved and a fresh grant can be issued until it lapses.
+// VendorApprovalGrant Signed, single-use grant (vendor realm, type vendor_approval, 5 minutes) for the kinds executed by another service (ADR-0014 A1.3). Its claims are the approval id, kind, organisation (the literal platform for tax_rule_set_publish), requester, approver and a subject hash over the fields named per kind: organisation id and target status for org_suspend, org_reinstate and org_close; rule-set id, content hash and effective date for tax_rule_set_publish. The admin service passes it to the executing service and never to the browser. If the executor refuses, the approval stays approved and a fresh grant can be issued with issueVendorApprovalGrant until the approval lapses.
 type VendorApprovalGrant struct {
 	// ExpiresAt RFC 3339 instant in UTC.
 	//
@@ -3178,12 +3984,12 @@ type VendorAuditEntry struct {
 	// Example: vendor.device.revoked
 	Action string `json:"action"`
 
-	// ActorVendorUserId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// ActorVendorUserId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ActorVendorUserId Id `json:"actor_vendor_user_id"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -3193,7 +3999,7 @@ type VendorAuditEntry struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	OccurredAt Timestamp `json:"occurred_at"`
 
-	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OrganisationId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OrganisationId *Id `json:"organisation_id,omitempty"`
@@ -3218,12 +4024,12 @@ type VendorAuditEntry struct {
 	// Example: 203.0.113.7
 	SourceAddress *string `json:"source_address,omitempty"`
 
-	// SupportSessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// SupportSessionId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	SupportSessionId *Id `json:"support_session_id,omitempty"`
 
-	// TargetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// TargetId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	TargetId *Id `json:"target_id,omitempty"`
@@ -3255,12 +4061,12 @@ type VendorDevice struct {
 	// Example: true
 	BillingCapable bool `json:"billing_capable"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
 
-	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1).
+	// KeyProtection Protection tier of the device key, reported by the device at registration. Information, not proof, and no permission depends on it (ADR-0005 A1). The hub's `dev` key file (CI and the soak, ADR-0002 A3.2 item 3) reports os-software here and `store` unprotected in its credential.
 	//
 	// Example: hardware
 	KeyProtection *KeyProtection `json:"key_protection,omitempty"`
@@ -3275,7 +4081,7 @@ type VendorDevice struct {
 	// Example: 2026-11-24T13:05:11.120Z
 	LastContactAt *Timestamp `json:"last_contact_at,omitempty"`
 
-	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// OutletId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	OutletId Id `json:"outlet_id"`
@@ -3302,15 +4108,25 @@ type VendorDevicePage struct {
 
 // VendorPrincipal The signed-in vendor user and what the role allows.
 type VendorPrincipal struct {
+	// CanApproveFrom From when the account may approve (the date its first credential was set plus 7 days, ADR-0005 A2.3); in the past once eligible. Carried by VendorPrincipal only; VendorUser does not have it.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	CanApproveFrom *Timestamp `json:"can_approve_from,omitempty"`
+
 	// DisplayName Display name.
 	//
 	// Example: Priya
 	DisplayName string `json:"display_name"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
+
+	// LastSignInAt When the user last signed in; absent before the first sign-in. Carried by VendorPrincipal only; VendorUser does not have it.
+	//
+	// Example: 2026-11-24T13:05:11.120Z
+	LastSignInAt *Timestamp `json:"last_sign_in_at,omitempty"`
 
 	// Permissions admin.* permission strings held.
 	Permissions []string `json:"permissions"`
@@ -3323,7 +4139,7 @@ type VendorPrincipal struct {
 
 // VendorRevoke Revoke one active device on a verified request. Terminal; no un-revoke and no wipe.
 type VendorRevoke struct {
-	// ApprovalId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// ApprovalId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	ApprovalId *Id `json:"approval_id,omitempty"`
@@ -3468,7 +4284,7 @@ type VendorUser struct {
 	// Example: staff@example.invalid
 	Email openapi_types.Email `json:"email"`
 
-	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// Id Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	Id Id `json:"id"`
@@ -3505,7 +4321,7 @@ type VendorUserStatus string
 
 // WipeOrder Wipe order, signed by identity. The device verifies it covers every local operation before wiping.
 type WipeOrder struct {
-	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted).
+	// DeviceId Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
 	//
 	// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
 	DeviceId Id `json:"device_id"`
@@ -3522,6 +4338,9 @@ type WipeOrder struct {
 	//
 	// Example: wipe.jws.example
 	Jws string `json:"jws"`
+
+	// StatementHash SHA-256 (lowercase hex) of the canonical JSON of the device-signed drain statement this order rests on (ADR-0005 A3.3 item 6). The shell wipes only when it is the hash of a statement this device signed and the statement covers every local op. Present on every wipe order issued from now on; a key-loss recovery has no wipe order.
+	StatementHash *string `json:"statement_hash,omitempty"`
 }
 
 // ApprovalToken defines model for ApprovalToken.
@@ -3536,6 +4355,11 @@ type IdempotencyKey = string
 // Limit defines model for Limit.
 type Limit = int
 
+// OutletScope Client-generated, time-sortable UUIDv7 in lower-case canonical form (ADR-0003 policy; ULID is not accepted). The row id of an entity whose entity file declares a deterministic id (id.rule uuidv5, ADR-0014) is a UUIDv5 in the same form, so two devices that write the same natural key converge on one row.
+//
+// Example: 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b
+type OutletScope = Id
+
 // VendorClientAddress defines model for VendorClientAddress.
 type VendorClientAddress = string
 
@@ -3547,6 +4371,9 @@ type ActivationInvalid = Problem
 
 // ApprovalConflict RFC 9457 problem details. `type` is a stable URI per error kind.
 type ApprovalConflict = Problem
+
+// ApprovalNotExecutable RFC 9457 problem details. `type` is a stable URI per error kind.
+type ApprovalNotExecutable = Problem
 
 // ApprovalRequired RFC 9457 problem details. `type` is a stable URI per error kind.
 type ApprovalRequired = Problem
@@ -3587,6 +4414,9 @@ type SupportSessionConflict = Problem
 // SwitchOwnerRole RFC 9457 problem details. `type` is a stable URI per error kind.
 type SwitchOwnerRole = Problem
 
+// TenancyUnavailable RFC 9457 problem details. `type` is a stable URI per error kind.
+type TenancyUnavailable = Problem
+
 // TooManyRequests RFC 9457 problem details. `type` is a stable URI per error kind.
 type TooManyRequests = Problem
 
@@ -3612,6 +4442,12 @@ type WipeNotReady = Problem
 type RecordDeviceDrainedParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// GetMemberGrantsParams defines parameters for GetMemberGrants.
+type GetMemberGrantsParams struct {
+	// OutletId Outlet the effective permissions are computed for.
+	OutletId Id `form:"outlet_id" json:"outlet_id"`
 }
 
 // CheckPackHistoryParams defines parameters for CheckPackHistory.
@@ -3688,6 +4524,15 @@ type ClaimCodeHalfParams struct {
 
 // ApproveVendorApprovalParams defines parameters for ApproveVendorApproval.
 type ApproveVendorApprovalParams struct {
+	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
+	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
+
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// IssueVendorApprovalGrantParams defines parameters for IssueVendorApprovalGrant.
+type IssueVendorApprovalGrantParams struct {
 	// XVendorClientAddress Network address of the staff member's browser, passed down by the admin service. Trusted only together with the admin service token; used for the audit record alone.
 	XVendorClientAddress *VendorClientAddress `json:"X-Vendor-Client-Address,omitempty"`
 
@@ -3920,12 +4765,33 @@ type ResetVendorUserTotpParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// ListActivationCodesParams defines parameters for ListActivationCodes.
+type ListActivationCodesParams struct {
+	// Cursor Opaque cursor from a previous response's next_cursor.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size (default 50, maximum 200).
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XOutletId Selects the outlet/property scope within the token's organisation. The tenant itself is always taken from the token, never from a header, query or body field.
+	XOutletId *OutletScope `json:"X-Outlet-Id,omitempty"`
+}
+
 // CreateActivationCodeParams defines parameters for CreateActivationCode.
 type CreateActivationCodeParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
+	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
+}
+
+// RevokeActivationCodeParams defines parameters for RevokeActivationCode.
+type RevokeActivationCodeParams struct {
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4021,7 +4887,16 @@ type RegisterDeviceParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
+	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
+}
+
+// CreateDeviceRecoveryCodeParams defines parameters for CreateDeviceRecoveryCode.
+type CreateDeviceRecoveryCodeParams struct {
+	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4030,7 +4905,7 @@ type RevokeDeviceParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4051,7 +4926,7 @@ type CreateMemberParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4060,7 +4935,7 @@ type UpdateMemberParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4069,7 +4944,7 @@ type RemoveOwnerRoleParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4078,7 +4953,7 @@ type AssignOwnerRoleParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4093,7 +4968,7 @@ type ClearPinLockoutParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4102,7 +4977,7 @@ type AuthorisePinResetParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4111,7 +4986,7 @@ type CreateRoleAssignmentParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4120,7 +4995,7 @@ type DeleteRoleAssignmentParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4150,7 +5025,7 @@ type CreateRoleParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4159,7 +5034,7 @@ type DeleteRoleParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4168,7 +5043,7 @@ type UpdateRoleParams struct {
 	// IdempotencyKey Client-generated unique key, 1-128 visible ASCII characters (a UUIDv7 is recommended). A replay with the same key and request returns the original status and body without repeating the effect. The same key with a different request returns 422 (code idempotency.mismatch); the same key while the first request is still in progress returns 409 (code idempotency.in_progress); an invalid key returns 422 (code idempotency.key_invalid). Records expire after 24 hours. An operation whose response carries a one-time secret (token, refresh token, code, code half, grant, offline pack) never has that response stored: its replay returns 409 (code idempotency.replay_secret) and the client repeats the operation with a new key. Token-issuing operations (sessions, refresh, device and drain tokens) are not recorded; a replay runs again and meets the credential checks.
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 
-	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId) and bh (hash of the request body), so it releases only that one request. Needed when the binding is under caution and the operation is blocked.
+	// HostryApproval Per-operation approval token (ADR-0005 A2.2). ES256, typ approval, 5 minutes, single use; claims include op (the operationId), bh (hash of the request body) and th (target hash), so it releases only that one request on that one target. th is the lower-case hex SHA-256 over the UTF-8 text METHOD, a newline, the request path with its ids exactly as sent (no query string), a newline and the 64 hex digits of bh (no sha256: prefix), for example "POST\n/v1/members\n<bh hex>"; the verifier recomputes it from the request it received and refuses a token whose th differs (403 approval.target_mismatch). Needed when the binding is under caution and the operation is blocked.
 	HostryApproval *ApprovalToken `json:"Hostry-Approval,omitempty"`
 }
 
@@ -4417,11 +5292,85 @@ func (t *DeviceTokenRequest) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsOfflinePackClaims returns the union data inside the OfflinePack_Claims as a OfflinePackClaims
+func (t OfflinePack_Claims) AsOfflinePackClaims() (OfflinePackClaims, error) {
+	var body OfflinePackClaims
+	err := runtime.JSONUnmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOfflinePackClaims overwrites any union data inside the OfflinePack_Claims as the provided OfflinePackClaims
+func (t *OfflinePack_Claims) FromOfflinePackClaims(v OfflinePackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	t.union = b
+	return err
+}
+
+// MergeOfflinePackClaims performs a merge with any union data inside the OfflinePack_Claims, using the provided OfflinePackClaims
+func (t *OfflinePack_Claims) MergeOfflinePackClaims(v OfflinePackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsHubPackClaims returns the union data inside the OfflinePack_Claims as a HubPackClaims
+func (t OfflinePack_Claims) AsHubPackClaims() (HubPackClaims, error) {
+	var body HubPackClaims
+	err := runtime.JSONUnmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHubPackClaims overwrites any union data inside the OfflinePack_Claims as the provided HubPackClaims
+func (t *OfflinePack_Claims) FromHubPackClaims(v HubPackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHubPackClaims performs a merge with any union data inside the OfflinePack_Claims, using the provided HubPackClaims
+func (t *OfflinePack_Claims) MergeHubPackClaims(v HubPackClaims) error {
+	b, err := runtime.JSONMarshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t OfflinePack_Claims) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *OfflinePack_Claims) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetDeviceCredential The identity-signed credential of a device, in any state
+	// (GET /internal/v1/devices/{device_id}/credential)
+	GetDeviceCredential(w http.ResponseWriter, r *http.Request, deviceId Id)
 	// RecordDeviceDrained Record that a device is drained
 	// (PUT /internal/v1/devices/{device_id}/drain)
 	RecordDeviceDrained(w http.ResponseWriter, r *http.Request, deviceId Id, params RecordDeviceDrainedParams)
+	// GetPackGrants What an issued offline pack granted
+	// (GET /internal/v1/devices/{device_id}/packs/{pack_v}/grants)
+	GetPackGrants(w http.ResponseWriter, r *http.Request, deviceId Id, packV int)
+	// GetDeviceRecovery The key-loss recovery record of an old device
+	// (GET /internal/v1/devices/{device_id}/recovery)
+	GetDeviceRecovery(w http.ResponseWriter, r *http.Request, deviceId Id)
+	// GetMemberGrants A member's status and effective permissions at an outlet now
+	// (GET /internal/v1/members/{member_id}/grants)
+	GetMemberGrants(w http.ResponseWriter, r *http.Request, memberId Id, params GetMemberGrantsParams)
 	// CheckPackHistory Was a member or series code issued to the device in a pack?
 	// (POST /internal/v1/pack-history-checks)
 	CheckPackHistory(w http.ResponseWriter, r *http.Request, params CheckPackHistoryParams)
@@ -4431,6 +5380,9 @@ type ServerInterface interface {
 	// ListRevocations Revocations since a cursor (sync gateway reconciliation)
 	// (GET /internal/v1/revocations)
 	ListRevocations(w http.ResponseWriter, r *http.Request, params ListRevocationsParams)
+	// GetSession The fixed facts of a strong session
+	// (GET /internal/v1/sessions/{session_id})
+	GetSession(w http.ResponseWriter, r *http.Request, sessionId Id)
 	// ListVendorApprovals List vendor approvals
 	// (GET /internal/v1/vendor/approvals)
 	ListVendorApprovals(w http.ResponseWriter, r *http.Request, params ListVendorApprovalsParams)
@@ -4449,6 +5401,9 @@ type ServerInterface interface {
 	// ApproveVendorApproval Approve with a fresh TOTP
 	// (PUT /internal/v1/vendor/approvals/{approval_id}/decision)
 	ApproveVendorApproval(w http.ResponseWriter, r *http.Request, approvalId Id, params ApproveVendorApprovalParams)
+	// IssueVendorApprovalGrant Issue a fresh grant for a still-approved approval
+	// (POST /internal/v1/vendor/approvals/{approval_id}/grants)
+	IssueVendorApprovalGrant(w http.ResponseWriter, r *http.Request, approvalId Id, params IssueVendorApprovalGrantParams)
 	// ListVendorAuditEntries Read the vendor audit log
 	// (GET /internal/v1/vendor/audit-entries)
 	ListVendorAuditEntries(w http.ResponseWriter, r *http.Request, params ListVendorAuditEntriesParams)
@@ -4518,9 +5473,15 @@ type ServerInterface interface {
 	// ResetVendorUserTotp Reset a vendor user's TOTP
 	// (POST /internal/v1/vendor/users/{vendor_user_id}/totp-resets)
 	ResetVendorUserTotp(w http.ResponseWriter, r *http.Request, vendorUserId Id, params ResetVendorUserTotpParams)
+	// ListActivationCodes List the activation codes that can still be redeemed
+	// (GET /v1/activation-codes)
+	ListActivationCodes(w http.ResponseWriter, r *http.Request, params ListActivationCodesParams)
 	// CreateActivationCode Create a single-use device activation code
 	// (POST /v1/activation-codes)
 	CreateActivationCode(w http.ResponseWriter, r *http.Request, params CreateActivationCodeParams)
+	// RevokeActivationCode Revoke an unredeemed activation code
+	// (DELETE /v1/activation-codes/{activation_code_id})
+	RevokeActivationCode(w http.ResponseWriter, r *http.Request, activationCodeId Id, params RevokeActivationCodeParams)
 	// ListApprovalRequests List approval requests the caller may decide
 	// (GET /v1/approval-requests)
 	ListApprovalRequests(w http.ResponseWriter, r *http.Request, params ListApprovalRequestsParams)
@@ -4560,6 +5521,9 @@ type ServerInterface interface {
 	// GetDeviceOfflinePack Fetch a fresh offline pack (device token)
 	// (GET /v1/devices/{device_id}/offline-packs/latest)
 	GetDeviceOfflinePack(w http.ResponseWriter, r *http.Request, deviceId Id)
+	// CreateDeviceRecoveryCode Create a single-use recovery code for a device that lost its key
+	// (POST /v1/devices/{device_id}/recovery-codes)
+	CreateDeviceRecoveryCode(w http.ResponseWriter, r *http.Request, deviceId Id, params CreateDeviceRecoveryCodeParams)
 	// RevokeDevice Revoke a device (it keeps only the drain path)
 	// (PUT /v1/devices/{device_id}/revocation)
 	RevokeDevice(w http.ResponseWriter, r *http.Request, deviceId Id, params RevokeDeviceParams)
@@ -4658,6 +5622,32 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// GetDeviceCredential operation middleware
+func (siw *ServerInterfaceWrapper) GetDeviceCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "device_id" -------------
+	var deviceId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "device_id", r.PathValue("device_id"), &deviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "device_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDeviceCredential(w, r, deviceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RecordDeviceDrained operation middleware
 func (siw *ServerInterfaceWrapper) RecordDeviceDrained(w http.ResponseWriter, r *http.Request) {
 
@@ -4703,6 +5693,109 @@ func (siw *ServerInterfaceWrapper) RecordDeviceDrained(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RecordDeviceDrained(w, r, deviceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPackGrants operation middleware
+func (siw *ServerInterfaceWrapper) GetPackGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "device_id" -------------
+	var deviceId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "device_id", r.PathValue("device_id"), &deviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "device_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "pack_v" -------------
+	var packV int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pack_v", r.PathValue("pack_v"), &packV, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pack_v", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPackGrants(w, r, deviceId, packV)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDeviceRecovery operation middleware
+func (siw *ServerInterfaceWrapper) GetDeviceRecovery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "device_id" -------------
+	var deviceId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "device_id", r.PathValue("device_id"), &deviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "device_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDeviceRecovery(w, r, deviceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMemberGrants operation middleware
+func (siw *ServerInterfaceWrapper) GetMemberGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "member_id" -------------
+	var memberId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member_id", r.PathValue("member_id"), &memberId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMemberGrantsParams
+
+	// ------------- Required query parameter "outlet_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "outlet_id", r.URL.Query(), &params.OutletId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "outlet_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outlet_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMemberGrants(w, r, memberId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4839,6 +5932,32 @@ func (siw *ServerInterfaceWrapper) ListRevocations(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRevocations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSession operation middleware
+func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "session_id" -------------
+	var sessionId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "session_id", r.PathValue("session_id"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "session_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSession(w, r, sessionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5252,6 +6371,79 @@ func (siw *ServerInterfaceWrapper) ApproveVendorApproval(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApproveVendorApproval(w, r, approvalId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueVendorApprovalGrant operation middleware
+func (siw *ServerInterfaceWrapper) IssueVendorApprovalGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "approval_id" -------------
+	var approvalId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "approval_id", r.PathValue("approval_id"), &approvalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "approval_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IssueVendorApprovalGrantParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Vendor-Client-Address" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Vendor-Client-Address")]; found {
+		var XVendorClientAddress VendorClientAddress
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Vendor-Client-Address", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Vendor-Client-Address", valueList[0], &XVendorClientAddress, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Vendor-Client-Address", Err: err})
+			return
+		}
+
+		params.XVendorClientAddress = &XVendorClientAddress
+
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueVendorApprovalGrant(w, r, approvalId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6885,6 +8077,73 @@ func (siw *ServerInterfaceWrapper) ResetVendorUserTotp(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListActivationCodes operation middleware
+func (siw *ServerInterfaceWrapper) ListActivationCodes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListActivationCodesParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Outlet-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Outlet-Id")]; found {
+		var XOutletId OutletScope
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Outlet-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Outlet-Id", valueList[0], &XOutletId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Outlet-Id", Err: err})
+			return
+		}
+
+		params.XOutletId = &XOutletId
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListActivationCodes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateActivationCode operation middleware
 func (siw *ServerInterfaceWrapper) CreateActivationCode(w http.ResponseWriter, r *http.Request) {
 
@@ -6940,6 +8199,79 @@ func (siw *ServerInterfaceWrapper) CreateActivationCode(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateActivationCode(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeActivationCode operation middleware
+func (siw *ServerInterfaceWrapper) RevokeActivationCode(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "activation_code_id" -------------
+	var activationCodeId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "activation_code_id", r.PathValue("activation_code_id"), &activationCodeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "activation_code_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeActivationCodeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "Hostry-Approval" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Hostry-Approval")]; found {
+		var HostryApproval ApprovalToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Hostry-Approval", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Hostry-Approval", valueList[0], &HostryApproval, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Hostry-Approval", Err: err})
+			return
+		}
+
+		params.HostryApproval = &HostryApproval
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeActivationCode(w, r, activationCodeId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7587,6 +8919,79 @@ func (siw *ServerInterfaceWrapper) GetDeviceOfflinePack(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDeviceOfflinePack(w, r, deviceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateDeviceRecoveryCode operation middleware
+func (siw *ServerInterfaceWrapper) CreateDeviceRecoveryCode(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "device_id" -------------
+	var deviceId Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "device_id", r.PathValue("device_id"), &deviceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "device_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateDeviceRecoveryCodeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "Hostry-Approval" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Hostry-Approval")]; found {
+		var HostryApproval ApprovalToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Hostry-Approval", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Hostry-Approval", valueList[0], &HostryApproval, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Hostry-Approval", Err: err})
+			return
+		}
+
+		params.HostryApproval = &HostryApproval
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateDeviceRecoveryCode(w, r, deviceId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9250,7 +10655,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/device-nonces", wrapper.CreateDeviceNonce)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jwks", wrapper.GetJwks)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/vendor-jwks", wrapper.GetVendorJwks)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activation-codes", wrapper.ListActivationCodes)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/activation-codes", wrapper.CreateActivationCode)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/devices/{device_id}/recovery-codes", wrapper.CreateDeviceRecoveryCode)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/activation-codes/{activation_code_id}", wrapper.RevokeActivationCode)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/device-activations", wrapper.ActivateDevice)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/devices", wrapper.ListDevices)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/devices", wrapper.RegisterDevice)
@@ -9287,6 +10695,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/devices/{device_id}/drain", wrapper.RecordDeviceDrained)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/proof-verifications", wrapper.VerifyProof)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/pack-history-checks", wrapper.CheckPackHistory)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/devices/{device_id}/credential", wrapper.GetDeviceCredential)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/devices/{device_id}/packs/{pack_v}/grants", wrapper.GetPackGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/members/{member_id}/grants", wrapper.GetMemberGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/devices/{device_id}/recovery", wrapper.GetDeviceRecovery)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/sessions/{session_id}", wrapper.GetSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/sessions", wrapper.CreateVendorSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/session-renewals", wrapper.RenewVendorSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/internal/v1/vendor/sessions/current", wrapper.EndVendorSession)
@@ -9314,6 +10727,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/approvals", wrapper.CreateVendorApproval)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}", wrapper.GetVendorApproval)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/decision", wrapper.ApproveVendorApproval)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/grants", wrapper.IssueVendorApprovalGrant)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/code-half-claims", wrapper.ClaimCodeHalf)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/vendor/approvals/{approval_id}/cancellation", wrapper.CancelVendorApproval)
 

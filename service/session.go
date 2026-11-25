@@ -228,6 +228,9 @@ func (s *Service) RefreshSession(ctx context.Context, in gen.RefreshSession) (ge
 			if err := put(tx, kSession, repository.Global, sess.ID, sess, keys{k1: sess.MemberID, k2: sess.AccountID}); err != nil {
 				return err
 			}
+			if err := s.addRevocation(tx, sess.TenantID, "session", sess.ID); err != nil {
+				return err
+			}
 			if err := s.emitSessionRevoked(tx, sess, "refresh_reuse"); err != nil {
 				return err
 			}
@@ -348,6 +351,9 @@ func (s *Service) EndSession(ctx context.Context, sid string) error {
 		}
 		sess.Revoked = true
 		if err := put(tx, kSession, repository.Global, sid, sess, keys{k1: sess.MemberID, k2: sess.AccountID}); err != nil {
+			return err
+		}
+		if err := s.addRevocation(tx, sess.TenantID, "session", sess.ID); err != nil {
 			return err
 		}
 		return s.emitSessionRevoked(tx, sess, "signed_out")
