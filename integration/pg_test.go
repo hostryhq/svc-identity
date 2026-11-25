@@ -290,8 +290,8 @@ func (f *failingLog) RecordPlatformInTx(ctx context.Context, tx tenancy.Execer, 
 func newE2E(t *testing.T) (*e2e, *failingLog) {
 	t.Helper()
 	st, db := newDB(t)
-	fl := &failingLog{AccessLog: postgres.AccessLog{DB: db}}
-	d := double.New(double.Options{Store: st, AccessLog: fl, Idem: &postgres.Idempotency{DB: db}})
+	fl := &failingLog{AccessLog: postgres.AccessLog{DB: db, Role: "identity_app"}}
+	d := double.New(double.Options{Store: st, AccessLog: fl, Idem: postgres.NewIdempotency(st)})
 	return &e2e{t: t, d: d, db: db}, fl
 }
 

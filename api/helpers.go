@@ -13,9 +13,6 @@ import (
 
 	auth "github.com/hostryhq/go-auth"
 	"github.com/hostryhq/go-common/apperr"
-	"github.com/hostryhq/go-common/idempotency"
-	"github.com/hostryhq/go-common/ids"
-	"github.com/hostryhq/go-common/tenancy"
 	"github.com/hostryhq/svc-identity/service"
 )
 
@@ -32,70 +29,6 @@ type captured struct {
 func (c *captured) Header() http.Header         { return c.header }
 func (c *captured) Write(b []byte) (int, error) { return c.body.Write(b) }
 func (c *captured) WriteHeader(s int)           { c.status = s }
-
-var errNotStored = errors.New("api: response not stored for replay")
-
-// idempotent implements the Idempotency-Key contract (api-contract-standard): the first request
-// with a key runs, a replay with the same request returns the stored response, the same key with a
-// different request is 422 idempotency.mismatch. Failed requests (4xx other than validation, 5xx)
-// are not stored, so a retry re-runs. The key is scoped per tenant; routes with no tenant use the
-// zero scope and a key per caller address is not needed because the fingerprint binds the body.
-func (h *Handler) idempotent(next http.Handler, spec routeSpec) http.Handler {
-	mutating := !strings.HasPrefix(spec.Pattern, "GET ")
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key, ok, err := idempotency.KeyFromRequest(r)
-		if err != nil {
-			apperr.WriteProblem(w, r, err)
-			return
-		}
-		if !mutating || !ok || h.d.Idem == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
-		if err != nil || len(body) > maxBody {
-			apperr.WriteProblem(w, r, apperr.New(apperr.Validation, "validation.failed", "the request is invalid"))
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		scope := ids.ID(noTenantScope)
-		if tc, ok := tenancy.From(r.Context()); ok {
-			scope = tc.TenantID
-		}
-		var cap *captured
-		resp, replayed, err := idempotency.Do(r.Context(), h.d.Idem, scope, key, idempotency.Fingerprint(r.Method, r.URL.Path, body), func() (idempotency.Response, error) {
-			cap = &captured{status: http.StatusOK, header: http.Header{}}
-			next.ServeHTTP(cap, r)
-			if cap.status >= 500 || cap.status == http.StatusUnauthorized || cap.status == http.StatusTooManyRequests {
-				return idempotency.Response{}, errNotStored
-			}
-			return idempotency.Response{Status: cap.status, ContentType: cap.header.Get("Content-Type"), Body: cap.body.Bytes()}, nil
-		})
-		switch {
-		case errors.Is(err, errNotStored):
-			copyHeaders(w.Header(), cap.header)
-			w.WriteHeader(cap.status)
-			_, _ = w.Write(cap.body.Bytes())
-		case err != nil:
-			apperr.WriteProblem(w, r, err)
-		default:
-			if replayed {
-				if aerr := h.auditReplay(r, spec, body); aerr != nil {
-					writeErr(w, r, aerr)
-					return
-				}
-			}
-			if resp.ContentType != "" {
-				w.Header().Set("Content-Type", resp.ContentType)
-			}
-			if cap != nil && !replayed {
-				copyHeaders(w.Header(), cap.header)
-			}
-			w.WriteHeader(resp.Status)
-			_, _ = w.Write(resp.Body)
-		}
-	})
-}
 
 func copyHeaders(dst, src http.Header) {
 	for k, v := range src {

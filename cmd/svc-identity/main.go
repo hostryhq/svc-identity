@@ -95,7 +95,7 @@ func assemble(ctx context.Context, cfg *config, log *slog.Logger) (*compose.Resu
 		return nil, nil, err
 	}
 	res, err := compose.Assemble(compose.Parts{
-		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB()}, Idem: &postgres.Idempotency{DB: st.DB()}, Clock: clock.System,
+		Cfg: sc, Store: st, AccessLog: &postgres.AccessLog{DB: st.DB(), Role: cfg.DBRole}, Idem: postgres.NewIdempotency(st), Clock: clock.System,
 		NewID: ids.New, Rand: crypto.System, SMS: sms, Notify: logNotifier{log}, Mail: terminalMail{}, Signer: signer,
 		Services: reg, Tenancy: ten, Log: log, Health: hc, SMSAsync: true,
 	})
@@ -132,6 +132,21 @@ func serve(ctx context.Context, cfg *config) error {
 			case <-t.C:
 				if _, err := res.Service.CompleteDueRecoveries(ctx); err != nil {
 					log.Error("recovery completion failed", "error", err)
+				}
+			}
+		}
+	}()
+	go func() { // idempotency records expire after 24 hours
+		sweeper := postgres.NewIdempotency(st)
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if _, err := sweeper.Sweep(ctx); err != nil {
+					log.Error("idempotency sweep failed", "error", err)
 				}
 			}
 		}
